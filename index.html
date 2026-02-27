@@ -1321,21 +1321,26 @@ function saveVentData() {
   }
   
   // Validacija decimala samo ako su polja popunjena
+  const isMRU = state.currentDevice === 'MRU Optima Biogas';
+  const gasDecimals = isMRU ? 2 : 1; // MRU: 2 decimale, GA5000: 1 decimala
+  const gasPattern = isMRU ? /^\d+\.\d{2}$/ : /^\d+\.\d{1}$/;
+  const gasExample = isMRU ? '45.50' : '45.5';
+  
   if (ch4) {
-    if (!/^\d+\.\d{2}$/.test(ch4)) {
-      alert("CH₄ mora imati točno 2 decimale (npr. 45.50)!");
+    if (!gasPattern.test(ch4)) {
+      alert(`CH₄ mora imati točno ${gasDecimals} ${gasDecimals === 1 ? 'decimalu' : 'decimale'} (npr. ${gasExample})!`);
       return;
     }
   }
   if (co2) {
-    if (!/^\d+\.\d{2}$/.test(co2)) {
-      alert("CO₂ mora imati točno 2 decimale (npr. 30.25)!");
+    if (!gasPattern.test(co2)) {
+      alert(`CO₂ mora imati točno ${gasDecimals} ${gasDecimals === 1 ? 'decimalu' : 'decimale'} (npr. ${gasExample})!`);
       return;
     }
   }
   if (o2) {
-    if (!/^\d+\.\d{2}$/.test(o2)) {
-      alert("O₂ mora imati točno 2 decimale (npr. 20.50)!");
+    if (!gasPattern.test(o2)) {
+      alert(`O₂ mora imati točno ${gasDecimals} ${gasDecimals === 1 ? 'decimalu' : 'decimale'} (npr. ${gasExample})!`);
       return;
     }
   }
