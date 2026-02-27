@@ -1992,17 +1992,26 @@ async function processOCR(canvas) {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
     
-    // More aggressive preprocessing for camera photos
+    // Enhanced preprocessing specifically for this LCD type
+    // First pass: increase brightness for dark LCD screens
+    for (let i = 0; i < data.length; i += 4) {
+      // Increase brightness by 20%
+      data[i] = Math.min(255, data[i] * 1.2);
+      data[i + 1] = Math.min(255, data[i + 1] * 1.2);
+      data[i + 2] = Math.min(255, data[i + 2] * 1.2);
+    }
+    
+    // Second pass: convert to grayscale and apply high contrast
     for (let i = 0; i < data.length; i += 4) {
       const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
       
       // Very high contrast for LCD screens
-      const contrast = 3.0;
+      const contrast = 3.5;
       let value = ((avg - 128) * contrast) + 128;
       value = Math.max(0, Math.min(255, value));
       
       // Sharp threshold - make it pure black or white
-      value = value > 130 ? 255 : 0;
+      value = value > 120 ? 255 : 0;
       
       data[i] = value;
       data[i + 1] = value;
@@ -2058,25 +2067,63 @@ function parseOCRResults(text) {
   const allNumbers = [];
   const lines = text.split('\n');
   
-  // Extract all numbers from text, line by line (vertical layout)
-  for (let line of lines) {
-    // Clean the line
-    line = line.trim();
+  // Keywords to identify measurement lines (ignore other lines like "Ostatak")
+  const validKeywords = ['CH4', 'CO2', 'O2', 'H2', 'H2S', 'T2'];
+  const ignoreKeywords = ['Ostatak', 'N2', 'Stop', 'Pohrani', 'Mjerenje', 'bioplina'];
+  
+  console.log('=== ANALIZA LINIJA ===');
+  
+  // Extract numbers only from valid measurement lines
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].trim();
     if (!line) continue;
     
-    // Find all numbers including decimals
-    const matches = line.match(/\d+[,.]?\d*/g);
-    if (matches) {
-      matches.forEach(num => {
-        const normalized = num.replace(',', '.');
-        const value = parseFloat(normalized);
-        // Accept numbers from 0 to 999 (covers all gas measurements and temperature)
-        if (!isNaN(value) && value >= 0 && value < 1000) {
-          allNumbers.push(value);
-          console.log(`Pronađen broj: ${value} (iz linije: "${line}")`);
-        }
-      });
+    // Skip lines with ignore keywords
+    let shouldIgnore = false;
+    for (let keyword of ignoreKeywords) {
+      if (line.includes(keyword)) {
+        console.log(`⊗ Preskačem liniju (${keyword}): "${line}"`);
+        shouldIgnore = true;
+        break;
+      }
     }
+    if (shouldIgnore) continue;
+    
+    // Check if this line contains a valid measurement keyword
+    let isValidLine = false;
+    for (let keyword of validKeywords) {
+      if (line.includes(keyword)) {
+        isValidLine = true;
+        console.log(`✓ Validna linija (${keyword}): "${line}"`);
+        break;
+      }
+    }
+    
+    // If valid line OR if we already have some numbers (continuation line with just number)
+    if (isValidLine || (allNumbers.length > 0 && allNumbers.length < 6)) {
+      // Find all numbers including decimals
+      const matches = line.match(/\d+[,.]?\d*/g);
+      if (matches) {
+        matches.forEach(num => {
+          // Skip if we already have 6 numbers
+          if (allNumbers.length >= 6) return;
+          
+          const normalized = num.replace(',', '.');
+          const value = parseFloat(normalized);
+          
+          // Accept numbers from 0 to 999
+          if (!isNaN(value) && value >= 0 && value < 1000) {
+            allNumbers.push(value);
+            console.log(`  → Broj ${allNumbers.length}: ${value}`);
+          }
+        });
+      }
+    } else {
+      console.log(`⊗ Preskačem liniju (nije validna): "${line}"`);
+    }
+    
+    // Stop after we have 6 numbers
+    if (allNumbers.length >= 6) break;
   }
   
   console.log('=== SVI PRONAĐENI BROJEVI ===');
@@ -2085,7 +2132,7 @@ function parseOCRResults(text) {
   console.log('MRU4U redoslijed: CH4, CO2, O2, H2, H2S, T2(temp)');
   console.log('============================');
   
-  // Need at least 6 numbers for all fields
+  // Need exactly 6 numbers for all fields
   if (allNumbers.length >= 6) {
     // Take first 6 numbers in order they appear (vertical layout)
     const ch4 = allNumbers[0];
