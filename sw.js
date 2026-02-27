@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mop-mjerenje-v7';
+const CACHE_NAME = 'mop-mjerenje-v11';
 const urlsToCache = [
   './index.html',
   './manifest.json',
@@ -28,8 +28,7 @@ const urlsToCache = [
   './slike/odlagalista/Rovinj.jpg',
   './slike/odlagalista/Pazin.jpg',
   './slike/odlagalista/Biljane-Donje.jpg',
-  'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js',
-  'https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js'
+  'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js'
 ];
 
 // Instalacija Service Workera
