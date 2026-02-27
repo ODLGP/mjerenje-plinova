@@ -681,6 +681,14 @@ textarea {
       <div style="margin-top: 8px; font-size: 12px; color: #888; text-align: center;">
         <span id="ocr-device-info">Učitavanje...</span>
       </div>
+      <div style="margin-top: 8px; padding: 10px; background: #fff3cd; border-radius: 6px; font-size: 12px; color: #856404;">
+        <strong>💡 Savjeti za fotografiranje:</strong><br>
+        • Drži mobitel ravno iznad LCD ekrana<br>
+        • Osiguraj dobro osvjetljenje (bez sjene)<br>
+        • LCD ekran treba biti čist<br>
+        • Brojevi trebaju biti jasno vidljivi<br>
+        • Fotografiraj samo LCD ekran (bez pozadine)
+      </div>
     </div>
     
     <div class="form-group">
@@ -1957,24 +1965,57 @@ async function processOCR(canvas) {
   scanStatus.style.color = '#2196F3';
   
   try {
+    // Resize image if too large (camera photos are usually huge)
+    const maxWidth = 1200;
+    const maxHeight = 1600;
+    
+    if (canvas.width > maxWidth || canvas.height > maxHeight) {
+      const scale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
+      const newWidth = Math.floor(canvas.width * scale);
+      const newHeight = Math.floor(canvas.height * scale);
+      
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = newWidth;
+      tempCanvas.height = newHeight;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+      
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(tempCanvas, 0, 0);
+      
+      scanStatus.textContent = 'Slika smanjena za bolju obradu...';
+    }
+    
     const ctx = canvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
     
-    // Aggressive preprocessing for LCD screens
+    // More aggressive preprocessing for camera photos
     for (let i = 0; i < data.length; i += 4) {
       const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      // Higher contrast for LCD
-      const contrast = 2.5;
+      
+      // Very high contrast for LCD screens
+      const contrast = 3.0;
       let value = ((avg - 128) * contrast) + 128;
       value = Math.max(0, Math.min(255, value));
-      // Sharper threshold
-      value = value > 140 ? 255 : 0;
+      
+      // Sharp threshold - make it pure black or white
+      value = value > 130 ? 255 : 0;
+      
       data[i] = value;
       data[i + 1] = value;
       data[i + 2] = value;
     }
     ctx.putImageData(imageData, 0, 0);
+    
+    // Log processed image for debugging
+    console.log('=== OBRADJENA SLIKA ===');
+    console.log('Dimenzije:', canvas.width, 'x', canvas.height);
+    console.log('Možete vidjeti obrađenu sliku u konzoli (desni klik > Save image as...)');
+    console.log(canvas.toDataURL());
+    console.log('=====================');
     
     scanStatus.textContent = 'Analiziram tekst...';
     
@@ -1984,7 +2025,8 @@ async function processOCR(canvas) {
           const progress = Math.round(m.progress * 100);
           scanStatus.textContent = `Prepoznajem tekst... ${progress}%`;
         }
-      }
+      },
+      tessedit_char_whitelist: '0123456789.,- '
     });
     
     const success = parseOCRResults(text);
@@ -2016,23 +2058,36 @@ function parseOCRResults(text) {
   const allNumbers = [];
   const lines = text.split('\n');
   
+  // Extract all numbers from text, line by line (vertical layout)
   for (let line of lines) {
+    // Clean the line
+    line = line.trim();
+    if (!line) continue;
+    
+    // Find all numbers including decimals
     const matches = line.match(/\d+[,.]?\d*/g);
     if (matches) {
       matches.forEach(num => {
         const normalized = num.replace(',', '.');
         const value = parseFloat(normalized);
-        if (!isNaN(value) && value < 1000) {
+        // Accept numbers from 0 to 999 (covers all gas measurements and temperature)
+        if (!isNaN(value) && value >= 0 && value < 1000) {
           allNumbers.push(value);
+          console.log(`Pronađen broj: ${value} (iz linije: "${line}")`);
         }
       });
     }
   }
   
-  console.log('All numbers found:', allNumbers);
+  console.log('=== SVI PRONAĐENI BROJEVI ===');
+  console.log('Ukupno brojeva:', allNumbers.length);
+  console.log('Brojevi:', allNumbers);
   console.log('MRU4U redoslijed: CH4, CO2, O2, H2, H2S, T2(temp)');
+  console.log('============================');
   
+  // Need at least 6 numbers for all fields
   if (allNumbers.length >= 6) {
+    // Take first 6 numbers in order they appear (vertical layout)
     const ch4 = allNumbers[0];
     const co2 = allNumbers[1];
     const o2 = allNumbers[2];
@@ -2046,37 +2101,44 @@ function parseOCRResults(text) {
     console.log('O2:', o2, '%');
     console.log('H2:', h2, 'ppm');
     console.log('H2S:', h2s, 'ppm');
-    console.log('T2 (Temp):', temp, 'C');
+    console.log('T2 (Temp):', temp, '°C');
     console.log('============================');
     
+    // Fill form fields with validation
     if (ch4 !== undefined && ch4 >= 0 && ch4 <= 100) {
       document.getElementById('ch4').value = ch4.toFixed(2);
+      console.log('✓ CH4 popunjeno:', ch4.toFixed(2));
     }
     
     if (co2 !== undefined && co2 >= 0 && co2 <= 100) {
       document.getElementById('co2').value = co2.toFixed(2);
+      console.log('✓ CO2 popunjeno:', co2.toFixed(2));
     }
     
     if (o2 !== undefined && o2 >= 0 && o2 <= 100) {
       document.getElementById('o2').value = o2.toFixed(2);
+      console.log('✓ O2 popunjeno:', o2.toFixed(2));
     }
     
     if (h2 !== undefined && h2 >= 0 && h2 < 10000) {
       document.getElementById('h2').value = Math.round(h2);
+      console.log('✓ H2 popunjeno:', Math.round(h2));
     }
     
     if (h2s !== undefined && h2s >= 0 && h2s < 10000) {
       document.getElementById('h2s').value = Math.round(h2s);
+      console.log('✓ H2S popunjeno:', Math.round(h2s));
     }
     
     if (temp !== undefined && temp >= -50 && temp <= 150) {
       document.getElementById('vent-temp').value = temp.toFixed(1);
+      console.log('✓ Temperatura popunjena:', temp.toFixed(1));
     }
     
-    console.log('Sva polja uspjesno popunjena!');
+    console.log('✅ Sva polja uspjesno popunjena!');
     return true;
   } else {
-    console.log('Pronadjeno samo', allNumbers.length, 'brojeva. Potrebno je najmanje 6.');
+    console.log('⚠️ Pronadjeno samo', allNumbers.length, 'brojeva. Potrebno je najmanje 6.');
     console.log('Provjerite da li je slika jasna i da su svi podaci vidljivi.');
     return false;
   }
