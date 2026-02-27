@@ -684,15 +684,15 @@ textarea {
     <div class="form-group">
       <div>
         <label>CH₄ [%]:</label>
-        <input id="ch4" step="0.01" type="number" inputmode="decimal">
+        <input id="ch4" step="0.1" type="number" inputmode="decimal">
       </div>
       <div>
         <label>CO₂ [%]:</label>
-        <input id="co2" step="0.01" type="number" inputmode="decimal">
+        <input id="co2" step="0.1" type="number" inputmode="decimal">
       </div>
       <div>
         <label>O₂ [%]:</label>
-        <input id="o2" step="0.01" type="number" inputmode="decimal">
+        <input id="o2" step="0.1" type="number" inputmode="decimal">
       </div>
       <div>
         <label>H₂ [ppm]:</label>
@@ -1204,6 +1204,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('vent-form').reset();
     document.getElementById('vent-name').value = selected;
     document.getElementById('vent-form').style.display = 'block';
+    updateInputSteps();
     closeVentSelectModal();
   };
   document.getElementById('manual-vent-open').onclick = function(e) {
@@ -1222,6 +1223,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('vent-form').reset();
     document.getElementById('vent-name').value = name;
     document.getElementById('vent-form').style.display = 'block';
+    updateInputSteps();
     closeManualVentModal();
   };
 });
@@ -1239,9 +1241,22 @@ function editVent(index) {
   document.querySelector(`input[name="vent-status"][value="${vent.status}"]`).checked = true;
   document.getElementById('vent-note').value = vent.note || '';
   document.getElementById('vent-form').style.display = 'block';
+  updateInputSteps();
   
   // Omogući/onemogući polja ovisno o statusu
   toggleVentFields();
+}
+
+function updateInputSteps() {
+  // Postavi step atribute ovisno o uređaju
+  const isMRU = state.currentDevice === 'MRU Optima Biogas';
+  
+  document.getElementById('ch4').step = isMRU ? '0.01' : '0.1';
+  document.getElementById('co2').step = isMRU ? '0.01' : '0.1';
+  document.getElementById('o2').step = isMRU ? '0.01' : '0.1';
+  document.getElementById('h2').step = '1';
+  document.getElementById('h2s').step = '1';
+  document.getElementById('vent-temp').step = '0.1';
 }
 
 function deleteVent(index) {
