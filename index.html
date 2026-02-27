@@ -1127,36 +1127,45 @@ async function autoFillWeatherData() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  // Dodaj validaciju za decimalna mjesta na input poljima (samo za MRU Optima Biogas)
+  // Dodaj validaciju za decimalna mjesta na input poljima
   document.getElementById('ch4').addEventListener('input', function(e) {
-    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     let val = e.target.value;
     if (val.includes('.')) {
       let parts = val.split('.');
-      if (parts[1] && parts[1].length > 2) {
-        e.target.value = parseFloat(val).toFixed(2);
+      if (parts[1]) {
+        // MRU Optima Biogas: 2 decimale, GA5000: 1 decimala
+        const maxDecimals = state.currentDevice === 'MRU Optima Biogas' ? 2 : 1;
+        if (parts[1].length > maxDecimals) {
+          e.target.value = parseFloat(val).toFixed(maxDecimals);
+        }
       }
     }
   });
   
   document.getElementById('co2').addEventListener('input', function(e) {
-    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     let val = e.target.value;
     if (val.includes('.')) {
       let parts = val.split('.');
-      if (parts[1] && parts[1].length > 2) {
-        e.target.value = parseFloat(val).toFixed(2);
+      if (parts[1]) {
+        // MRU Optima Biogas: 2 decimale, GA5000: 1 decimala
+        const maxDecimals = state.currentDevice === 'MRU Optima Biogas' ? 2 : 1;
+        if (parts[1].length > maxDecimals) {
+          e.target.value = parseFloat(val).toFixed(maxDecimals);
+        }
       }
     }
   });
   
   document.getElementById('o2').addEventListener('input', function(e) {
-    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     let val = e.target.value;
     if (val.includes('.')) {
       let parts = val.split('.');
-      if (parts[1] && parts[1].length > 2) {
-        e.target.value = parseFloat(val).toFixed(2);
+      if (parts[1]) {
+        // MRU Optima Biogas: 2 decimale, GA5000: 1 decimala
+        const maxDecimals = state.currentDevice === 'MRU Optima Biogas' ? 2 : 1;
+        if (parts[1].length > maxDecimals) {
+          e.target.value = parseFloat(val).toFixed(maxDecimals);
+        }
       }
     }
   });
@@ -1174,7 +1183,6 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   document.getElementById('vent-temp').addEventListener('input', function(e) {
-    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     let val = e.target.value;
     if (val.includes('.')) {
       let parts = val.split('.');
