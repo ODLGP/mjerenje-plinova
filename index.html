@@ -2117,12 +2117,24 @@ function parseOCRResults(text) {
       const matches = line.match(/\d+[,.]?\d*/g);
       if (matches && matches.length > 0) {
         // Take the last number in the line (rightmost - the actual value)
-        const lastNum = matches[matches.length - 1];
-        const normalized = lastNum.replace(',', '.');
-        const value = parseFloat(normalized);
-        if (!isNaN(value) && value >= 0 && value < 1000) {
-          numbersWithKeywords.push(value);
-          console.log(`  → Broj: ${value} (zadnji broj u liniji)`);
+        // Skip single digit numbers unless they are the only number in line
+        let lastNum = null;
+        for (let i = matches.length - 1; i >= 0; i--) {
+          const normalized = matches[i].replace(',', '.');
+          const value = parseFloat(normalized);
+          // Accept if: has decimal point OR is >= 10 OR is the only number
+          if (!isNaN(value) && (normalized.includes('.') || value >= 10 || matches.length === 1)) {
+            lastNum = normalized;
+            break;
+          }
+        }
+        
+        if (lastNum) {
+          const value = parseFloat(lastNum);
+          if (!isNaN(value) && value >= 0 && value < 1000) {
+            numbersWithKeywords.push(value);
+            console.log(`  → Broj: ${value} (zadnji valjan broj u liniji)`);
+          }
         }
       }
     }
@@ -2161,9 +2173,17 @@ function parseOCRResults(text) {
           const normalized = num.replace(',', '.');
           const value = parseFloat(normalized);
           
-          if (!isNaN(value) && value >= 0 && value < 1000) {
+          // Skip small single-digit numbers that are likely part of labels (CO2, H2, etc.)
+          // Accept if: has decimal point OR is >= 10 OR is 0
+          const hasDecimal = normalized.includes('.');
+          const isLargeNumber = value >= 10;
+          const isZero = value === 0;
+          
+          if (!isNaN(value) && value >= 0 && value < 1000 && (hasDecimal || isLargeNumber || isZero)) {
             allNumbers.push(value);
             console.log(`  → Broj ${allNumbers.length}: ${value} (iz: "${line}")`);
+          } else if (value > 0 && value < 10 && !hasDecimal) {
+            console.log(`  ⊗ Preskačem mali broj: ${value} (vjerojatno dio oznake)`);
           }
         });
       }
