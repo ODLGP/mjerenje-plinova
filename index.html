@@ -678,17 +678,6 @@ textarea {
       </div>
       <input type="file" id="screenshot-input" accept="image/*" style="display: none;">
       <div id="scan-status" style="margin-top: 12px; color: #666; font-size: 13px; text-align: center;"></div>
-      <div style="margin-top: 8px; font-size: 12px; color: #888; text-align: center;">
-        <span id="ocr-device-info">Učitavanje...</span>
-      </div>
-      <div style="margin-top: 8px; padding: 10px; background: #fff3cd; border-radius: 6px; font-size: 12px; color: #856404;">
-        <strong>💡 Savjeti za fotografiranje:</strong><br>
-        • Drži mobitel ravno iznad LCD ekrana<br>
-        • Osiguraj dobro osvjetljenje (bez sjene)<br>
-        • LCD ekran treba biti čist<br>
-        • Brojevi trebaju biti jasno vidljivi<br>
-        • Fotografiraj samo LCD ekran (bez pozadine)
-      </div>
     </div>
     
     <div class="form-group">
@@ -1910,19 +1899,11 @@ function setupOCR() {
   
   // Detect if on mobile or desktop
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const deviceInfo = document.getElementById('ocr-device-info');
   
   if (!isMobile) {
     // On desktop, update button text to be clearer
     cameraBtn.textContent = 'Odaberi sliku LCD ekrana';
     uploadBtn.textContent = 'Odaberi MRU4U screenshot';
-    if (deviceInfo) {
-      deviceInfo.textContent = 'Na laptopu: oba gumba otvaraju datoteke za odabir slika.';
-    }
-  } else {
-    if (deviceInfo) {
-      deviceInfo.textContent = 'Na mobitelu: plavi otvara kameru, ljubičasti galeriju.';
-    }
   }
   
   // Both buttons open file picker (works on laptop and mobile)
@@ -1949,7 +1930,14 @@ function setupOCR() {
           ocrCanvas.width = img.width;
           ocrCanvas.height = img.height;
           context.drawImage(img, 0, 0);
-          processOCR(ocrCanvas);
+          
+          // Detect if it's likely a screenshot (smaller file, exact dimensions) or photo
+          const isLikelyScreenshot = file.size < 500000 || (img.width < 1500 && img.height < 2000);
+          console.log('Tip slike:', isLikelyScreenshot ? 'Screenshot' : 'Fotografija');
+          console.log('Veličina datoteke:', (file.size / 1024).toFixed(0), 'KB');
+          console.log('Dimenzije:', img.width, 'x', img.height);
+          
+          processOCR(ocrCanvas, isLikelyScreenshot);
         };
         img.src = event.target.result;
       };
@@ -1959,7 +1947,7 @@ function setupOCR() {
   });
 }
 
-async function processOCR(canvas) {
+async function processOCR(canvas, isScreenshot = false) {
   const scanStatus = document.getElementById('scan-status');
   scanStatus.textContent = 'Pripremam sliku...';
   scanStatus.style.color = '#2196F3';
@@ -1992,38 +1980,60 @@ async function processOCR(canvas) {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
     
-    // Enhanced preprocessing specifically for this LCD type
-    // First pass: increase brightness for dark LCD screens
-    for (let i = 0; i < data.length; i += 4) {
-      // Increase brightness by 20%
-      data[i] = Math.min(255, data[i] * 1.2);
-      data[i + 1] = Math.min(255, data[i + 1] * 1.2);
-      data[i + 2] = Math.min(255, data[i + 2] * 1.2);
+    console.log('=== OBRADA SLIKE ===');
+    console.log('Tip:', isScreenshot ? 'Screenshot' : 'Fotografija');
+    
+    if (isScreenshot) {
+      // Screenshot processing - lighter touch
+      console.log('Koristim obradu za screenshot (lakša obrada)');
+      for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        
+        // Moderate contrast for screenshots
+        const contrast = 2.0;
+        let value = ((avg - 128) * contrast) + 128;
+        value = Math.max(0, Math.min(255, value));
+        
+        // Threshold
+        value = value > 140 ? 255 : 0;
+        
+        data[i] = value;
+        data[i + 1] = value;
+        data[i + 2] = value;
+      }
+    } else {
+      // Photo processing - aggressive
+      console.log('Koristim obradu za fotografiju (agresivna obrada)');
+      
+      // First pass: increase brightness
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = Math.min(255, data[i] * 1.3);
+        data[i + 1] = Math.min(255, data[i + 1] * 1.3);
+        data[i + 2] = Math.min(255, data[i + 2] * 1.3);
+      }
+      
+      // Second pass: high contrast
+      for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        
+        const contrast = 3.5;
+        let value = ((avg - 128) * contrast) + 128;
+        value = Math.max(0, Math.min(255, value));
+        
+        value = value > 115 ? 255 : 0;
+        
+        data[i] = value;
+        data[i + 1] = value;
+        data[i + 2] = value;
+      }
     }
     
-    // Second pass: convert to grayscale and apply high contrast
-    for (let i = 0; i < data.length; i += 4) {
-      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      
-      // Very high contrast for LCD screens
-      const contrast = 3.5;
-      let value = ((avg - 128) * contrast) + 128;
-      value = Math.max(0, Math.min(255, value));
-      
-      // Sharp threshold - make it pure black or white
-      value = value > 120 ? 255 : 0;
-      
-      data[i] = value;
-      data[i + 1] = value;
-      data[i + 2] = value;
-    }
     ctx.putImageData(imageData, 0, 0);
     
     // Log processed image for debugging
     console.log('=== OBRADJENA SLIKA ===');
     console.log('Dimenzije:', canvas.width, 'x', canvas.height);
-    console.log('Možete vidjeti obrađenu sliku u konzoli (desni klik > Save image as...)');
-    console.log(canvas.toDataURL());
+    console.log('Možete vidjeti obrađenu sliku u konzoli');
     console.log('=====================');
     
     scanStatus.textContent = 'Analiziram tekst...';
@@ -2035,7 +2045,7 @@ async function processOCR(canvas) {
           scanStatus.textContent = `Prepoznajem tekst... ${progress}%`;
         }
       },
-      tessedit_char_whitelist: '0123456789.,- '
+      tessedit_char_whitelist: '0123456789.,- CHOTSMjerniboplaudk%pm°'
     });
     
     const success = parseOCRResults(text);
@@ -2044,7 +2054,7 @@ async function processOCR(canvas) {
       scanStatus.innerHTML = 'Rezultati uspjesno ucitani!';
       scanStatus.style.color = '#4CAF50';
     } else {
-      scanStatus.innerHTML = 'Nisam pronasao dovoljno podataka.<br><small>Pokusajte ponovno ili koristite screenshot opciju.</small>';
+      scanStatus.innerHTML = 'Nisam pronasao dovoljno podataka.<br><small>Provjerite konzolu (F12) za detalje.</small>';
       scanStatus.style.color = '#ff9800';
     }
     
@@ -2067,13 +2077,15 @@ function parseOCRResults(text) {
   const allNumbers = [];
   const lines = text.split('\n');
   
-  // Keywords to identify measurement lines (ignore other lines like "Ostatak")
-  const validKeywords = ['CH4', 'CO2', 'O2', 'H2', 'H2S', 'T2'];
-  const ignoreKeywords = ['Ostatak', 'N2', 'Stop', 'Pohrani', 'Mjerenje', 'bioplina'];
+  // Keywords to identify measurement lines
+  const validKeywords = ['CH4', 'CO2', 'O2', 'H2', 'H2S', 'T2', 'T-plina', 'Tplina'];
+  const ignoreKeywords = ['Ostatak', 'N2', 'Stop', 'Pohrani', 'Mjerenje', 'bioplina', 'F1', 'F2', 'F3', 'Tablica', 'Graf', 'SN', 'Interval'];
   
-  console.log('=== ANALIZA LINIJA ===');
+  console.log('=== METODA 1: TRAŽENJE S KLJUČNIM RIJEČIMA ===');
   
-  // Extract numbers only from valid measurement lines
+  const numbersWithKeywords = [];
+  
+  // Try to find numbers with keywords first
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i].trim();
     if (!line) continue;
@@ -2081,7 +2093,7 @@ function parseOCRResults(text) {
     // Skip lines with ignore keywords
     let shouldIgnore = false;
     for (let keyword of ignoreKeywords) {
-      if (line.includes(keyword)) {
+      if (line.toUpperCase().includes(keyword.toUpperCase())) {
         console.log(`⊗ Preskačem liniju (${keyword}): "${line}"`);
         shouldIgnore = true;
         break;
@@ -2090,51 +2102,84 @@ function parseOCRResults(text) {
     if (shouldIgnore) continue;
     
     // Check if this line contains a valid measurement keyword
-    let isValidLine = false;
+    let foundKeyword = null;
     for (let keyword of validKeywords) {
-      if (line.includes(keyword)) {
-        isValidLine = true;
-        console.log(`✓ Validna linija (${keyword}): "${line}"`);
+      if (line.toUpperCase().includes(keyword.toUpperCase())) {
+        foundKeyword = keyword;
         break;
       }
     }
     
-    // If valid line OR if we already have some numbers (continuation line with just number)
-    if (isValidLine || (allNumbers.length > 0 && allNumbers.length < 6)) {
-      // Find all numbers including decimals
+    if (foundKeyword) {
+      console.log(`✓ Pronađena linija (${foundKeyword}): "${line}"`);
+      
+      // Extract numbers from this line (take the LAST number - it's usually the value)
+      const matches = line.match(/\d+[,.]?\d*/g);
+      if (matches && matches.length > 0) {
+        // Take the last number in the line (rightmost - the actual value)
+        const lastNum = matches[matches.length - 1];
+        const normalized = lastNum.replace(',', '.');
+        const value = parseFloat(normalized);
+        if (!isNaN(value) && value >= 0 && value < 1000) {
+          numbersWithKeywords.push(value);
+          console.log(`  → Broj: ${value} (zadnji broj u liniji)`);
+        }
+      }
+    }
+  }
+  
+  console.log('Pronađeno s ključnim riječima:', numbersWithKeywords.length, 'brojeva');
+  
+  // If we found 6 numbers with keywords, use them
+  if (numbersWithKeywords.length >= 6) {
+    console.log('✅ Koristim brojeve pronađene s ključnim riječima');
+    allNumbers.push(...numbersWithKeywords.slice(0, 6));
+  } else {
+    // FALLBACK: Extract ALL numbers and take first 6
+    console.log('=== METODA 2: UZIMAM PRVIH 6 BROJEVA (FALLBACK) ===');
+    
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      if (!line) continue;
+      
+      // Skip obvious ignore lines
+      let shouldIgnore = false;
+      for (let keyword of ignoreKeywords) {
+        if (line.toUpperCase().includes(keyword.toUpperCase())) {
+          shouldIgnore = true;
+          break;
+        }
+      }
+      if (shouldIgnore) continue;
+      
+      // Extract all numbers
       const matches = line.match(/\d+[,.]?\d*/g);
       if (matches) {
         matches.forEach(num => {
-          // Skip if we already have 6 numbers
-          if (allNumbers.length >= 6) return;
+          if (allNumbers.length >= 6) return; // Stop after 6
           
           const normalized = num.replace(',', '.');
           const value = parseFloat(normalized);
           
-          // Accept numbers from 0 to 999
           if (!isNaN(value) && value >= 0 && value < 1000) {
             allNumbers.push(value);
-            console.log(`  → Broj ${allNumbers.length}: ${value}`);
+            console.log(`  → Broj ${allNumbers.length}: ${value} (iz: "${line}")`);
           }
         });
       }
-    } else {
-      console.log(`⊗ Preskačem liniju (nije validna): "${line}"`);
+      
+      if (allNumbers.length >= 6) break;
     }
-    
-    // Stop after we have 6 numbers
-    if (allNumbers.length >= 6) break;
   }
   
   console.log('=== SVI PRONAĐENI BROJEVI ===');
   console.log('Ukupno brojeva:', allNumbers.length);
   console.log('Brojevi:', allNumbers);
-  console.log('MRU4U redoslijed: CH4, CO2, O2, H2, H2S, T2(temp)');
+  console.log('MRU4U redoslijed: CH4, CO2, O2, H2, H2S, T-plina(temp)');
   console.log('============================');
   
-  // Need exactly 6 numbers for all fields
+  // Need at least 6 numbers
   if (allNumbers.length >= 6) {
-    // Take first 6 numbers in order they appear (vertical layout)
     const ch4 = allNumbers[0];
     const co2 = allNumbers[1];
     const o2 = allNumbers[2];
@@ -2148,7 +2193,7 @@ function parseOCRResults(text) {
     console.log('O2:', o2, '%');
     console.log('H2:', h2, 'ppm');
     console.log('H2S:', h2s, 'ppm');
-    console.log('T2 (Temp):', temp, '°C');
+    console.log('T-plina (Temp):', temp, '°C');
     console.log('============================');
     
     // Fill form fields with validation
@@ -2186,7 +2231,10 @@ function parseOCRResults(text) {
     return true;
   } else {
     console.log('⚠️ Pronadjeno samo', allNumbers.length, 'brojeva. Potrebno je najmanje 6.');
-    console.log('Provjerite da li je slika jasna i da su svi podaci vidljivi.');
+    console.log('📋 Sve linije teksta:');
+    lines.forEach((line, idx) => {
+      if (line.trim()) console.log(`  ${idx + 1}: "${line}"`);
+    });
     return false;
   }
 }
