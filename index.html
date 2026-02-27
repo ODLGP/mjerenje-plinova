@@ -1746,11 +1746,14 @@ function clearFilters() {
 
 function initApp() {
   // Ovdje zalijepi kod za Service Worker
+  // Service Worker privremeno isključen za GitHub Pages
+  /*
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js');
     });
   }
+  */
 
   // Ostatak tvog koda se nastavlja dalje...
   const select = document.getElementById('landfill-select');
@@ -1903,8 +1906,4 @@ function initApp() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
-</script>
-
-</body>
-</html>
+document.addEve
