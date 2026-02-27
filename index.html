@@ -13,7 +13,6 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 <style>
 :root {
   --primary: #2e7d32;
@@ -666,20 +665,6 @@ textarea {
     <label>Naziv odušnika:</label>
     <input id="vent-name" required type="text" readonly>
     
-    <!-- OCR Screenshot Upload (samo za MRU Optima Biogas) -->
-    <div id="ocr-section" style="margin: 15px 0; display: none;">
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-        <button type="button" id="camera-btn" style="background: #2196F3; padding: 12px 16px; font-size: 14px; border-radius: 6px; border: none; color: white; cursor: pointer; font-weight: 500; margin: 0;">
-          Fotografiraj LCD ekran
-        </button>
-        <button type="button" id="upload-screenshot-btn" style="background: #9C27B0; padding: 12px 16px; font-size: 14px; border-radius: 6px; border: none; color: white; cursor: pointer; font-weight: 500; margin: 0;">
-          Ucitaj screenshot MRU4U
-        </button>
-      </div>
-      <input type="file" id="screenshot-input" accept="image/*" style="display: none;">
-      <div id="scan-status" style="margin-top: 12px; color: #666; font-size: 13px; text-align: center;"></div>
-    </div>
-    
     <div class="form-group">
       <div>
         <label>CH₄ [%]:</label>
@@ -1195,7 +1180,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('vent-form').reset();
     document.getElementById('vent-name').value = selected;
     document.getElementById('vent-form').style.display = 'block';
-    updateOCRVisibility();
     closeVentSelectModal();
   };
   document.getElementById('manual-vent-open').onclick = function(e) {
@@ -1214,7 +1198,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('vent-form').reset();
     document.getElementById('vent-name').value = name;
     document.getElementById('vent-form').style.display = 'block';
-    updateOCRVisibility();
     closeManualVentModal();
   };
 });
@@ -1233,21 +1216,8 @@ function editVent(index) {
   document.getElementById('vent-note').value = vent.note || '';
   document.getElementById('vent-form').style.display = 'block';
   
-  // Prikaži/sakrij OCR ovisno o uređaju
-  updateOCRVisibility();
-  
   // Omogući/onemogući polja ovisno o statusu
   toggleVentFields();
-}
-
-// Funkcija za prikazivanje/skrivanje OCR sekcije
-function updateOCRVisibility() {
-  const ocrSection = document.getElementById('ocr-section');
-  const isMRU = state.currentDevice === 'MRU Optima Biogas';
-  
-  if (ocrSection) {
-    ocrSection.style.display = isMRU ? 'block' : 'none';
-  }
 }
 
 function deleteVent(index) {
@@ -1810,6 +1780,7 @@ function initApp() {
 
   document.getElementById('login-form').addEventListener('submit', e => {
     e.preventDefault();
+    
     state.currentMeasurer = document.getElementById('measurer-select').value;
     state.currentDevice = document.getElementById('device-select').value;
     if (!state.currentMeasurer || !state.currentDevice) {
@@ -1906,192 +1877,8 @@ function initApp() {
   }
 }
 
-// OCR Functionality
-function setupOCR() {
-  const cameraBtn = document.getElementById('camera-btn');
-  const uploadBtn = document.getElementById('upload-screenshot-btn');
-  const screenshotInput = document.getElementById('screenshot-input');
-  const ocrCanvas = document.getElementById('ocr-canvas');
-  
-  if (!uploadBtn || !cameraBtn || !screenshotInput || !ocrCanvas) {
-    console.error('OCR elements not found');
-    return;
-  }
-  
-  // Detect if on mobile or desktop
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  
-  if (!isMobile) {
-    // On desktop, update button text to be clearer
-    cameraBtn.textContent = 'Odaberi sliku LCD ekrana';
-    uploadBtn.textContent = 'Odaberi MRU4U screenshot';
-  }
-  
-  // Both buttons open file picker (works on laptop and mobile)
-  cameraBtn.addEventListener('click', () => {
-    // On mobile this will show camera option, on laptop just file picker
-    screenshotInput.setAttribute('capture', 'environment');
-    screenshotInput.click();
-  });
-  
-  uploadBtn.addEventListener('click', () => {
-    // Always opens file picker for screenshots
-    screenshotInput.removeAttribute('capture');
-    screenshotInput.click();
-  });
-  
-  screenshotInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const context = ocrCanvas.getContext('2d');
-          ocrCanvas.width = img.width;
-          ocrCanvas.height = img.height;
-          context.drawImage(img, 0, 0);
-          
-          // Detect if it's likely a screenshot (smaller file, exact dimensions) or photo
-          // For MRU4U screenshots, always use screenshot processing (lighter)
-          const isLikelyScreenshot = true; // Always use screenshot mode for better results
-          console.log('Tip slike: Screenshot mode (optimizirano za MRU)');
-          console.log('Veličina datoteke:', (file.size / 1024).toFixed(0), 'KB');
-          console.log('Dimenzije:', img.width, 'x', img.height);
-          
-          processOCR(ocrCanvas, isLikelyScreenshot);
-        };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-      screenshotInput.value = '';
-    }
-  });
-}
-
-async function processOCR(canvas, isScreenshot = false) {
-  const scanStatus = document.getElementById('scan-status');
-  scanStatus.textContent = 'Analiziram tekst...';
-  scanStatus.style.color = '#2196F3';
-  
-  try {
-    const { data: { text } } = await Tesseract.recognize(canvas, 'eng', {
-      logger: m => {
-        if (m.status === 'recognizing text') {
-          const progress = Math.round(m.progress * 100);
-          scanStatus.textContent = `Prepoznajem tekst... ${progress}%`;
-        }
-      }
-    });
-    
-    const success = parseOCRResults(text);
-    
-    if (success) {
-      scanStatus.innerHTML = '✅ Rezultati uspješno učitani!';
-      scanStatus.style.color = '#4CAF50';
-    } else {
-      scanStatus.innerHTML = '⚠️ Nisam pronašao dovoljno podataka.<br><small>Provjerite konzolu (F12) za detalje.</small>';
-      scanStatus.style.color = '#ff9800';
-    }
-    
-    setTimeout(() => {
-      scanStatus.textContent = '';
-    }, 8000);
-    
-  } catch (error) {
-    console.error('OCR Error:', error);
-    scanStatus.textContent = '❌ Greška pri skeniranju. Pokušajte ponovno.';
-    scanStatus.style.color = '#f44336';
-    
-    setTimeout(() => {
-      scanStatus.textContent = '';
-    }, 5000);
-  }
-}
-
-function parseOCRResults(text) {
-  console.log('=== OCR RAW TEXT ===');
-  console.log(text);
-  console.log('===================');
-  
-  // Extract all numbers (including decimals with comma or dot)
-  const numbers = [];
-  const lines = text.split('\n');
-  
-  for (let line of lines) {
-    // Match decimal numbers: 0,00 or 0.00 or 20,78 or 14,7
-    // Also match integers: 1, 0, 10
-    const matches = line.match(/\d+[,\.]\d+|\d+/g);
-    if (matches) {
-      for (let match of matches) {
-        const normalized = match.replace(',', '.');
-        const num = parseFloat(normalized);
-        if (!isNaN(num)) {
-          numbers.push(num);
-        }
-      }
-    }
-  }
-  
-  console.log('=== PRONAĐENI BROJEVI (raw) ===');
-  console.log('Svi brojevi:', numbers);
-  
-  // Filter out single digits that are part of next decimal number
-  // Example: [0, 0.04, 2, 20.74, 1, 14.8] -> remove 2 and 1
-  const filtered = [];
-  for (let i = 0; i < numbers.length; i++) {
-    const current = numbers[i];
-    const next = numbers[i + 1];
-    
-    // Skip single digit if next number starts with same digit and is >= 10
-    if (current < 10 && current === Math.floor(current) && next && next >= 10) {
-      const nextStr = next.toString();
-      const currentStr = current.toString();
-      if (nextStr.startsWith(currentStr)) {
-        console.log(`Preskačem ${current} jer je dio broja ${next}`);
-        continue;
-      }
-    }
-    
-    filtered.push(current);
-  }
-  
-  console.log('=== FILTRIRANI BROJEVI ===');
-  console.log('Brojevi nakon filtriranja:', filtered);
-  
-  if (filtered.length >= 6) {
-    // Take first 6 numbers as: CH4, CO2, O2, H2, H2S, Temp
-    console.log('=== REZULTATI ===');
-    console.log('CH4:', filtered[0], '%');
-    console.log('CO2:', filtered[1], '%');
-    console.log('O2:', filtered[2], '%');
-    console.log('H2:', filtered[3], 'ppm');
-    console.log('H2S:', filtered[4], 'ppm');
-    console.log('T-plina:', filtered[5], '°C');
-    console.log('=================');
-    
-    // Fill form
-    document.getElementById('ch4').value = filtered[0].toFixed(2);
-    document.getElementById('co2').value = filtered[1].toFixed(2);
-    document.getElementById('o2').value = filtered[2].toFixed(2);
-    document.getElementById('h2').value = Math.round(filtered[3]);
-    document.getElementById('h2s').value = Math.round(filtered[4]);
-    document.getElementById('vent-temp').value = filtered[5].toFixed(1);
-    
-    console.log('✅ Sva polja uspješno popunjena!');
-    return true;
-  } else {
-    console.log('⚠️ Nedovoljno brojeva - pronađeno:', filtered.length);
-    return false;
-  }
-}
-
 document.addEventListener('DOMContentLoaded', initApp);
-document.addEventListener('DOMContentLoaded', setupOCR);
 </script>
-
-<!-- OCR Canvas (hidden) -->
-<canvas id="ocr-canvas" style="display: none;"></canvas>
 
 </body>
 </html>
