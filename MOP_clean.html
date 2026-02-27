@@ -489,57 +489,6 @@ textarea {
 .share-btn:hover {
   background-color: #2980b9;
 }
-/* OCR Camera Modal */
-#ocr-modal {
-  display: none;
-  position: fixed;
-  z-index: 9999;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.95);
-  align-items: center;
-  justify-content: center;
-}
-#ocr-modal-content {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-#ocr-video {
-  width: 100%;
-  max-width: 640px;
-  height: auto;
-  border-radius: 10px;
-}
-#ocr-controls {
-  position: absolute;
-  bottom: 30px;
-  display: flex;
-  gap: 15px;
-}
-#ocr-controls button {
-  padding: 15px 30px;
-  font-size: 18px;
-  border-radius: 50px;
-  border: none;
-  cursor: pointer;
-  font-weight: bold;
-  margin: 0;
-}
-#capture-btn {
-  background: #4CAF50;
-  color: white;
-}
-#close-ocr-btn {
-  background: #f44336;
-  color: white;
-}
 @media (max-width: 600px) {
   body {
     padding: 10px;
@@ -718,15 +667,20 @@ textarea {
     <input id="vent-name" required type="text" readonly>
     
     <!-- OCR Screenshot Upload -->
-    <div style="margin: 20px 0; text-align: center;">
-      <button type="button" id="camera-btn" style="background: #2196F3; padding: 15px 30px; font-size: 16px; width: 100%; margin-bottom: 10px;">
-        � Fotografiraj LCD ekran
-      </button>
-      <button type="button" id="upload-screenshot-btn" style="background: #9C27B0; padding: 15px 30px; font-size: 16px; width: 100%;">
-        🖼️ Učitaj screenshot MRU4U aplikacije
-      </button>
+    <div style="margin: 15px 0;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <button type="button" id="camera-btn" style="background: #2196F3; padding: 12px 16px; font-size: 14px; border-radius: 6px; border: none; color: white; cursor: pointer; font-weight: 500; margin: 0;">
+          Fotografiraj LCD ekran
+        </button>
+        <button type="button" id="upload-screenshot-btn" style="background: #9C27B0; padding: 12px 16px; font-size: 14px; border-radius: 6px; border: none; color: white; cursor: pointer; font-weight: 500; margin: 0;">
+          Ucitaj screenshot MRU4U
+        </button>
+      </div>
       <input type="file" id="screenshot-input" accept="image/*" style="display: none;">
-      <div id="scan-status" style="margin-top: 10px; color: #666; font-size: 14px;"></div>
+      <div id="scan-status" style="margin-top: 12px; color: #666; font-size: 13px; text-align: center;"></div>
+      <div style="margin-top: 8px; font-size: 12px; color: #888; text-align: center;">
+        <span id="ocr-device-info">Učitavanje...</span>
+      </div>
     </div>
     
     <div class="form-group">
@@ -813,12 +767,12 @@ const DEVICES = [
   {
     value: "Geotech GA5000",
     label: "Geotech GA5000",
-    img: "https://i.ibb.co/rfpH9M6F/GA5000.jpg"
+    img: "slike/uredjaji/GA5000.jpg"
   },
   {
     value: "MRU Optima Biogas",
     label: "MRU Optima Biogas",
-    img: "https://i.ibb.co/9HQ1Dbcz/Optima-Biogas.jpg"
+    img: "slike/uredjaji/Optima-Biogas.png"
   }
 ];
 function renderDeviceDropdown() {
@@ -907,64 +861,64 @@ const VENTS_BY_LANDFILL = {
   20: ["Z01", "Z02", "Z03", "Z04", "Z05", "Z06"],
 };
 const LANDFILLS = [
-  { id: 1, name: 'Odlagalište otpada Križevci', image: 'https://i.ibb.co/gXj7d2h/Krizevci.jpg', lat: 46.0219, lon: 16.5425, 
+  { id: 1, name: 'Odlagalište otpada Križevci', image: 'slike/odlagalista/Krizevci.jpg', lat: 46.0219, lon: 16.5425, 
     client: 'Čistoća Križevci d.o.o., Ulica Ivana Gorana Kovačića 1, 48260 Križevci',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Križevci d.o.o., Križevci' },
-  { id: 2, name: 'Odlagalište otpada Koprivnica', image: 'https://i.ibb.co/5bKn04x/Koprivnica.png', lat: 46.1636, lon: 16.8297,
+  { id: 2, name: 'Odlagalište otpada Koprivnica', image: 'slike/odlagalista/Koprivnica.jpg', lat: 46.1636, lon: 16.8297,
     client: 'Komunalac Koprivnica d.o.o., Ulica Antuna Nemčića 5, 48000 Koprivnica',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Koprivnica d.o.o., Koprivnica' },
-  { id: 3, name: 'Odlagalište otpada Virovitica', image: 'https://i.ibb.co/NdWXd7zh/Virovitica.jpg', lat: 45.8319, lon: 17.3836,
+  { id: 3, name: 'Odlagalište otpada Virovitica', image: 'slike/odlagalista/Virovitica.jpg', lat: 45.8319, lon: 17.3836,
     client: 'Čistoća Virovitica d.o.o., Ulica Matije Gupca 78, 33000 Virovitica',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Virovitica d.o.o., Virovitica' },
-  { id: 4, name: 'Odlagalište otpada Grubišno Polje', image: 'https://i.ibb.co/Mj4QH3G/Grubisno-Polje.jpg', lat: 45.6989, lon: 17.1753,
+  { id: 4, name: 'Odlagalište otpada Grubišno Polje', image: 'slike/odlagalista/Grubisno-Polje.jpg', lat: 45.6989, lon: 17.1753,
     client: 'Komunalac d.o.o. Grubišno Polje, Ivana Nepomuka Jemeršića 37c, 43290 Grubišno Polje',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac d.o.o. Grubišno Polje, Prdavac - Grubišno Polje' },
-  { id: 5, name: 'Odlagalište otpada Belišće', image: 'https://i.ibb.co/zWXjQPHJ/Belisce.jpg', lat: 45.6806, lon: 18.4042,
+  { id: 5, name: 'Odlagalište otpada Belišće', image: 'slike/odlagalista/Belisce.jpg', lat: 45.6806, lon: 18.4042,
     client: 'Belišće Komunalac d.o.o., Trg Josipa Runjanina 1, 31551 Belišće',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Belišće Komunalac d.o.o., Belišće' },
-  { id: 6, name: 'Odlagalište otpada Beli Manastir', image: 'https://i.ibb.co/KxkNtJ77/Beli-Manastir.jpg', lat: 45.7697, lon: 18.6042,
+  { id: 6, name: 'Odlagalište otpada Beli Manastir', image: 'slike/odlagalista/Beli-Manastir.jpg', lat: 45.7697, lon: 18.6042,
     client: 'Komunalac Beli Manastir d.o.o., Ulica Josipa Jelačića 10, 31300 Beli Manastir',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Beli Manastir d.o.o., Beli Manastir' },
-  { id: 7, name: 'Odlagalište otpada Pag', image: 'https://i.ibb.co/jk95HgmT/Pag.png', lat: 44.4450, lon: 15.0597,
+  { id: 7, name: 'Odlagalište otpada Pag', image: 'slike/odlagalista/Pag.jpg', lat: 44.4450, lon: 15.0597,
     client: 'Vodovod Pag d.o.o., Ulica Jurja Dalmatinca 1, 23250 Pag',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Vodovod Pag d.o.o., Pag' },
-  { id: 8, name: 'Odlagalište otpada Otočac', image: 'https://i.ibb.co/RTRncf9H/Otocac.png', lat: 44.8697, lon: 15.2378,
+  { id: 8, name: 'Odlagalište otpada Otočac', image: 'slike/odlagalista/Otocac.jpg', lat: 44.8697, lon: 15.2378,
     client: 'Komunalac Otočac d.o.o., Ulica Vladimira Nazora 4, 53220 Otočac',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Otočac d.o.o., Otočac' },
-  { id: 9, name: 'Odlagalište otpada Zadar - Diklo', image: 'https://i.ibb.co/JWwyNp6J/Zadar.png', lat: 44.1194, lon: 15.2314,
+  { id: 9, name: 'Odlagalište otpada Zadar - Diklo', image: 'slike/odlagalista/Zadar.jpg', lat: 44.1194, lon: 15.2314,
     client: 'Čistoća Zadar d.o.o., Ulica Bože Peričića 5, 23000 Zadar',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Zadar d.o.o., Zadar - Diklo' },
-  { id: 10, name: 'Odlagalište otpada Split - Karepovac', image: 'https://i.ibb.co/tPT8v5rP/Karepovac.png', lat: 43.5081, lon: 16.4402,
+  { id: 10, name: 'Odlagalište otpada Split - Karepovac', image: 'slike/odlagalista/Karepovac.jpg', lat: 43.5081, lon: 16.4402,
     client: 'Čistoća Split d.o.o., Ulica Domovinskog rata 49, 21000 Split',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Split d.o.o., Split - Karepovac' },
-  { id: 11, name: 'Odlagalište otpada Knin - Mala Promina', image: 'https://i.ibb.co/KcMFgVwD/Knin.png', lat: 44.0406, lon: 16.1966,
+  { id: 11, name: 'Odlagalište otpada Knin - Mala Promina', image: 'slike/odlagalista/Knin.jpg', lat: 44.0406, lon: 16.1966,
     client: 'Vodovod Knin d.o.o., Ulica Ante Starčevića 2, 22300 Knin',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Vodovod Knin d.o.o., Knin - Mala Promina' },
-  { id: 12, name: 'Odlagalište otpada Kljakovača - Obrovac', image: 'https://i.ibb.co/7JjzKsB4/Obrovac.png', lat: 44.2036, lon: 15.6772,
+  { id: 12, name: 'Odlagalište otpada Kljakovača - Obrovac', image: 'slike/odlagalista/Obrovac.jpg', lat: 44.2036, lon: 15.6772,
     client: 'Komunalac Obrovac d.o.o., Ulica Stjepana Radića 1, 23450 Obrovac',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Obrovac d.o.o., Kljakovača - Obrovac' },
-  { id: 13, name: 'Odlagalište otpada Cere - Labin', image: 'https://i.ibb.co/VcpCYpnX/Labin.png', lat: 45.0931, lon: 14.1197,
+  { id: 13, name: 'Odlagalište otpada Cere - Labin', image: 'slike/odlagalista/Labin.jpg', lat: 45.0931, lon: 14.1197,
     client: 'Komunalac Labin d.o.o., Ulica Rudarska 1, 52220 Labin',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Labin d.o.o., Cere - Labin' },
-  { id: 14, name: 'Odlagalište otpada Novi Dvori - Zaprešić', image: 'https://i.ibb.co/RTWKphtH/Zapresic.png', lat: 45.8564, lon: 15.8072,
+  { id: 14, name: 'Odlagalište otpada Novi Dvori - Zaprešić', image: 'slike/odlagalista/Zapresic.jpg', lat: 45.8564, lon: 15.8072,
     client: 'Čistoća Zaprešić d.o.o., Ulica Matije Gupca 68, 10290 Zaprešić',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Zaprešić d.o.o., Novi Dvori - Zaprešić' },
-  { id: 15, name: 'Odlagalište otpada Griža - Buzet', image: 'https://i.ibb.co/Z1pCrvMY/Griza.png', lat: 45.4094, lon: 13.9667,
+  { id: 15, name: 'Odlagalište otpada Griža - Buzet', image: 'slike/odlagalista/Griza.jpg', lat: 45.4094, lon: 13.9667,
     client: 'Komunalac Buzet d.o.o., Ulica Fontana 6, 52420 Buzet',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Buzet d.o.o., Griža - Buzet' },
-  { id: 16, name: 'Odlagalište otpada Pržić - Cres', image: 'https://i.ibb.co/0pZV4WMx/Cres.png', lat: 44.9611, lon: 14.4084,
+  { id: 16, name: 'Odlagalište otpada Pržić - Cres', image: 'slike/odlagalista/Cres.jpg', lat: 44.9611, lon: 14.4084,
     client: 'Vodovod Cres d.o.o., Ulica Creskih kapetana 1, 51557 Cres',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Vodovod Cres d.o.o., Pržić - Cres' },
-  { id: 17, name: 'Odlagalište otpada Bedekovčina', image: 'https://i.ibb.co/7xTrG48C/Bedekovcina.png', lat: 46.0403, lon: 15.9942,
+  { id: 17, name: 'Odlagalište otpada Bedekovčina', image: 'slike/odlagalista/Bedekovcina.jpg', lat: 46.0403, lon: 15.9942,
     client: 'Komunalac Bedekovčina d.o.o., Ulica Trg Eugena Kvaternika 10, 49221 Bedekovčina',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Bedekovčina d.o.o., Bedekovčina' },
-  { id: 18, name: 'Odlagalište otpada Basilica - Rovinj', image: 'https://i.ibb.co/M5GLrkMt/Rovinj.png', lat: 45.0827, lon: 13.6346,
+  { id: 18, name: 'Odlagalište otpada Basilica - Rovinj', image: 'slike/odlagalista/Rovinj.jpg', lat: 45.0808, lon: 13.6386,
     client: 'Komunalac Rovinj d.o.o., Ulica Carrera 1, 52210 Rovinj',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Rovinj d.o.o., Basilica - Rovinj' },
-  { id: 19, name: 'Odlagalište otpada Jelenčići V - Pazin', image: 'https://i.ibb.co/prRS6NSP/Pazin.jpg', lat: 45.2397, lon: 13.9364,
+  { id: 19, name: 'Odlagalište otpada Jelenčići V - Pazin', image: 'slike/odlagalista/Pazin.jpg', lat: 45.2397, lon: 13.9364,
     client: 'Komunalac Pazin d.o.o., Ulica Vladimira Nazora 6, 52000 Pazin',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Pazin d.o.o., Jelenčići V - Pazin' },
-  { id: 20, name: 'Odlagalište otpada Biljane Donje', image: 'https://i.ibb.co/1tcDR7P1/Biljane-Donje.png', lat: 43.3439, lon: 17.0381,
+  { id: 20, name: 'Odlagalište otpada Biljane Donje', image: 'slike/odlagalista/Biljane-Donje.jpg', lat: 45.4833, lon: 16.9167,
     client: 'Komunalac Biljane Donje d.o.o., Ulica Biljane Donje 1, 43000 Bjelovar',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Biljane Donje d.o.o., Biljane Donje' }
 ];
@@ -1935,59 +1889,44 @@ function initApp() {
 }
 
 // OCR Functionality
-let ocrStream = null;
-
 function setupOCR() {
   const cameraBtn = document.getElementById('camera-btn');
   const uploadBtn = document.getElementById('upload-screenshot-btn');
   const screenshotInput = document.getElementById('screenshot-input');
   const ocrCanvas = document.getElementById('ocr-canvas');
-  const ocrModal = document.getElementById('ocr-modal');
-  const ocrVideo = document.getElementById('ocr-video');
-  const captureBtn = document.getElementById('capture-btn');
-  const closeBtn = document.getElementById('close-ocr-btn');
   
-  if (!uploadBtn) return;
+  if (!uploadBtn || !cameraBtn || !screenshotInput || !ocrCanvas) {
+    console.error('OCR elements not found');
+    return;
+  }
   
-  // Open camera
-  cameraBtn.addEventListener('click', async () => {
-    try {
-      ocrStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' }
-      });
-      ocrVideo.srcObject = ocrStream;
-      ocrModal.style.display = 'flex';
-      document.getElementById('scan-status').textContent = '';
-    } catch (error) {
-      alert('Greška: Ne mogu pristupiti kameri.\n\nKamera radi samo preko HTTPS (GitHub Pages).\nKoristi "Učitaj screenshot" opciju umjesto toga.');
-      console.error(error);
+  // Detect if on mobile or desktop
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const deviceInfo = document.getElementById('ocr-device-info');
+  
+  if (!isMobile) {
+    // On desktop, update button text to be clearer
+    cameraBtn.textContent = 'Odaberi sliku LCD ekrana';
+    uploadBtn.textContent = 'Odaberi MRU4U screenshot';
+    if (deviceInfo) {
+      deviceInfo.textContent = 'Na laptopu: oba gumba otvaraju datoteke za odabir slika.';
     }
+  } else {
+    if (deviceInfo) {
+      deviceInfo.textContent = 'Na mobitelu: plavi otvara kameru, ljubičasti galeriju.';
+    }
+  }
+  
+  // Both buttons open file picker (works on laptop and mobile)
+  cameraBtn.addEventListener('click', () => {
+    // On mobile this will show camera option, on laptop just file picker
+    screenshotInput.setAttribute('capture', 'environment');
+    screenshotInput.click();
   });
   
-  // Capture photo
-  captureBtn.addEventListener('click', () => {
-    const context = ocrCanvas.getContext('2d');
-    ocrCanvas.width = ocrVideo.videoWidth;
-    ocrCanvas.height = ocrVideo.videoHeight;
-    context.drawImage(ocrVideo, 0, 0);
-    
-    if (ocrStream) {
-      ocrStream.getTracks().forEach(track => track.stop());
-    }
-    ocrModal.style.display = 'none';
-    processOCR(ocrCanvas);
-  });
-  
-  // Close modal
-  closeBtn.addEventListener('click', () => {
-    if (ocrStream) {
-      ocrStream.getTracks().forEach(track => track.stop());
-    }
-    ocrModal.style.display = 'none';
-  });
-  
-  // Upload screenshot
   uploadBtn.addEventListener('click', () => {
+    // Always opens file picker for screenshots
+    screenshotInput.removeAttribute('capture');
     screenshotInput.click();
   });
   
@@ -2014,7 +1953,7 @@ function setupOCR() {
 
 async function processOCR(canvas) {
   const scanStatus = document.getElementById('scan-status');
-  scanStatus.textContent = '🔄 Pripremam sliku...';
+  scanStatus.textContent = 'Pripremam sliku...';
   scanStatus.style.color = '#2196F3';
   
   try {
@@ -2022,25 +1961,28 @@ async function processOCR(canvas) {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
     
+    // Aggressive preprocessing for LCD screens
     for (let i = 0; i < data.length; i += 4) {
       const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      const contrast = 1.5;
+      // Higher contrast for LCD
+      const contrast = 2.5;
       let value = ((avg - 128) * contrast) + 128;
       value = Math.max(0, Math.min(255, value));
-      value = value > 128 ? 255 : 0;
+      // Sharper threshold
+      value = value > 140 ? 255 : 0;
       data[i] = value;
       data[i + 1] = value;
       data[i + 2] = value;
     }
     ctx.putImageData(imageData, 0, 0);
     
-    scanStatus.textContent = '🔄 Analiziram tekst...';
+    scanStatus.textContent = 'Analiziram tekst...';
     
     const { data: { text } } = await Tesseract.recognize(canvas, 'eng', {
       logger: m => {
         if (m.status === 'recognizing text') {
           const progress = Math.round(m.progress * 100);
-          scanStatus.textContent = `🔄 Prepoznajem tekst... ${progress}%`;
+          scanStatus.textContent = `Prepoznajem tekst... ${progress}%`;
         }
       }
     });
@@ -2048,10 +1990,10 @@ async function processOCR(canvas) {
     const success = parseOCRResults(text);
     
     if (success) {
-      scanStatus.innerHTML = '✅ Rezultati uspješno učitani!<br><small style="color:#666;">💡 Savjet: Obriši screenshot iz galerije da uštediš memoriju</small>';
+      scanStatus.innerHTML = 'Rezultati uspjesno ucitani!';
       scanStatus.style.color = '#4CAF50';
     } else {
-      scanStatus.innerHTML = '⚠️ Nisam pronašao dovoljno podataka (potrebno 6 brojeva).<br>Provjerite screenshot i pokušajte ponovno.';
+      scanStatus.innerHTML = 'Nisam pronasao dovoljno podataka.<br><small>Pokusajte ponovno ili koristite screenshot opciju.</small>';
       scanStatus.style.color = '#ff9800';
     }
     
@@ -2061,7 +2003,7 @@ async function processOCR(canvas) {
     
   } catch (error) {
     console.error('OCR Error:', error);
-    scanStatus.textContent = '❌ Greška pri skeniranju. Pokušajte ponovno.';
+    scanStatus.textContent = 'Greska pri skeniranju. Pokusajte ponovno.';
     scanStatus.style.color = '#f44336';
   }
 }
@@ -2088,6 +2030,7 @@ function parseOCRResults(text) {
   }
   
   console.log('All numbers found:', allNumbers);
+  console.log('MRU4U redoslijed: CH4, CO2, O2, H2, H2S, T2(temp)');
   
   if (allNumbers.length >= 6) {
     const ch4 = allNumbers[0];
@@ -2096,6 +2039,15 @@ function parseOCRResults(text) {
     const h2 = allNumbers[3];
     const h2s = allNumbers[4];
     const temp = allNumbers[5];
+    
+    console.log('=== MAPIRANJE VRIJEDNOSTI ===');
+    console.log('CH4:', ch4, '%');
+    console.log('CO2:', co2, '%');
+    console.log('O2:', o2, '%');
+    console.log('H2:', h2, 'ppm');
+    console.log('H2S:', h2s, 'ppm');
+    console.log('T2 (Temp):', temp, 'C');
+    console.log('============================');
     
     if (ch4 !== undefined && ch4 >= 0 && ch4 <= 100) {
       document.getElementById('ch4').value = ch4.toFixed(2);
@@ -2109,11 +2061,11 @@ function parseOCRResults(text) {
       document.getElementById('o2').value = o2.toFixed(2);
     }
     
-    if (h2 !== undefined && h2 >= 0) {
+    if (h2 !== undefined && h2 >= 0 && h2 < 10000) {
       document.getElementById('h2').value = Math.round(h2);
     }
     
-    if (h2s !== undefined && h2s >= 0) {
+    if (h2s !== undefined && h2s >= 0 && h2s < 10000) {
       document.getElementById('h2s').value = Math.round(h2s);
     }
     
@@ -2121,13 +2073,11 @@ function parseOCRResults(text) {
       document.getElementById('vent-temp').value = temp.toFixed(1);
     }
     
-    console.log('=== POPUNJENO ===');
-    console.log({ ch4, co2, o2, h2, h2s, temp });
-    console.log('=================');
-    
+    console.log('Sva polja uspjesno popunjena!');
     return true;
   } else {
-    console.log('Pronađeno samo', allNumbers.length, 'brojeva. Potrebno je najmanje 6.');
+    console.log('Pronadjeno samo', allNumbers.length, 'brojeva. Potrebno je najmanje 6.');
+    console.log('Provjerite da li je slika jasna i da su svi podaci vidljivi.');
     return false;
   }
 }
@@ -2135,17 +2085,6 @@ function parseOCRResults(text) {
 document.addEventListener('DOMContentLoaded', initApp);
 document.addEventListener('DOMContentLoaded', setupOCR);
 </script>
-
-<!-- OCR Camera Modal -->
-<div id="ocr-modal">
-  <div id="ocr-modal-content">
-    <video id="ocr-video" autoplay playsinline></video>
-    <div id="ocr-controls">
-      <button id="capture-btn">📸 Fotografiraj</button>
-      <button id="close-ocr-btn">✖ Zatvori</button>
-    </div>
-  </div>
-</div>
 
 <!-- OCR Canvas (hidden) -->
 <canvas id="ocr-canvas" style="display: none;"></canvas>
