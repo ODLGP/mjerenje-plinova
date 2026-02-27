@@ -666,8 +666,8 @@ textarea {
     <label>Naziv odušnika:</label>
     <input id="vent-name" required type="text" readonly>
     
-    <!-- OCR Screenshot Upload -->
-    <div style="margin: 15px 0;">
+    <!-- OCR Screenshot Upload (samo za MRU Optima Biogas) -->
+    <div id="ocr-section" style="margin: 15px 0; display: none;">
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
         <button type="button" id="camera-btn" style="background: #2196F3; padding: 12px 16px; font-size: 14px; border-radius: 6px; border: none; color: white; cursor: pointer; font-weight: 500; margin: 0;">
           Fotografiraj LCD ekran
@@ -1126,8 +1126,9 @@ async function autoFillWeatherData() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  // Dodaj validaciju za decimalna mjesta na input poljima
+  // Dodaj validaciju za decimalna mjesta na input poljima (samo za MRU Optima Biogas)
   document.getElementById('ch4').addEventListener('input', function(e) {
+    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     let val = e.target.value;
     if (val.includes('.')) {
       let parts = val.split('.');
@@ -1138,6 +1139,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   document.getElementById('co2').addEventListener('input', function(e) {
+    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     let val = e.target.value;
     if (val.includes('.')) {
       let parts = val.split('.');
@@ -1148,6 +1150,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   document.getElementById('o2').addEventListener('input', function(e) {
+    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     let val = e.target.value;
     if (val.includes('.')) {
       let parts = val.split('.');
@@ -1158,16 +1161,19 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   
   document.getElementById('h2').addEventListener('input', function(e) {
+    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     // Ukloni sve decimale
     e.target.value = e.target.value.replace(/\./g, '').replace(/[^\d]/g, '');
   });
   
   document.getElementById('h2s').addEventListener('input', function(e) {
+    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     // Ukloni sve decimale
     e.target.value = e.target.value.replace(/\./g, '').replace(/[^\d]/g, '');
   });
   
   document.getElementById('vent-temp').addEventListener('input', function(e) {
+    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
     let val = e.target.value;
     if (val.includes('.')) {
       let parts = val.split('.');
@@ -1189,6 +1195,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('vent-form').reset();
     document.getElementById('vent-name').value = selected;
     document.getElementById('vent-form').style.display = 'block';
+    updateOCRVisibility();
     closeVentSelectModal();
   };
   document.getElementById('manual-vent-open').onclick = function(e) {
@@ -1207,6 +1214,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('vent-form').reset();
     document.getElementById('vent-name').value = name;
     document.getElementById('vent-form').style.display = 'block';
+    updateOCRVisibility();
     closeManualVentModal();
   };
 });
@@ -1225,8 +1233,21 @@ function editVent(index) {
   document.getElementById('vent-note').value = vent.note || '';
   document.getElementById('vent-form').style.display = 'block';
   
+  // Prikaži/sakrij OCR ovisno o uređaju
+  updateOCRVisibility();
+  
   // Omogući/onemogući polja ovisno o statusu
   toggleVentFields();
+}
+
+// Funkcija za prikazivanje/skrivanje OCR sekcije
+function updateOCRVisibility() {
+  const ocrSection = document.getElementById('ocr-section');
+  const isMRU = state.currentDevice === 'MRU Optima Biogas';
+  
+  if (ocrSection) {
+    ocrSection.style.display = isMRU ? 'block' : 'none';
+  }
 }
 
 function deleteVent(index) {
@@ -1932,8 +1953,9 @@ function setupOCR() {
           context.drawImage(img, 0, 0);
           
           // Detect if it's likely a screenshot (smaller file, exact dimensions) or photo
-          const isLikelyScreenshot = file.size < 500000 || (img.width < 1500 && img.height < 2000);
-          console.log('Tip slike:', isLikelyScreenshot ? 'Screenshot' : 'Fotografija');
+          // For MRU4U screenshots, always use screenshot processing (lighter)
+          const isLikelyScreenshot = true; // Always use screenshot mode for better results
+          console.log('Tip slike: Screenshot mode (optimizirano za MRU)');
           console.log('Veličina datoteke:', (file.size / 1024).toFixed(0), 'KB');
           console.log('Dimenzije:', img.width, 'x', img.height);
           
@@ -1984,18 +2006,18 @@ async function processOCR(canvas, isScreenshot = false) {
     console.log('Tip:', isScreenshot ? 'Screenshot' : 'Fotografija');
     
     if (isScreenshot) {
-      // Screenshot processing - lighter touch
-      console.log('Koristim obradu za screenshot (lakša obrada)');
+      // Screenshot processing - optimized for both LCD and MRU4U app
+      console.log('Koristim obradu za screenshot/LCD (optimizirana obrada)');
       for (let i = 0; i < data.length; i += 4) {
         const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
         
-        // Moderate contrast for screenshots
-        const contrast = 2.0;
+        // Moderate contrast - works for both LCD photos and app screenshots
+        const contrast = 2.5;
         let value = ((avg - 128) * contrast) + 128;
         value = Math.max(0, Math.min(255, value));
         
-        // Threshold
-        value = value > 140 ? 255 : 0;
+        // Threshold - balanced for digital displays
+        value = value > 130 ? 255 : 0;
         
         data[i] = value;
         data[i + 1] = value;
@@ -2074,187 +2096,147 @@ function parseOCRResults(text) {
   console.log(text);
   console.log('===================');
   
-  const allNumbers = [];
-  const lines = text.split('\n');
+  const upperText = text.toUpperCase();
   
-  // Keywords to identify measurement lines
-  const validKeywords = ['CH4', 'CO2', 'O2', 'H2', 'H2S', 'T2', 'T-plina', 'Tplina'];
-  const ignoreKeywords = ['Ostatak', 'N2', 'Stop', 'Pohrani', 'Mjerenje', 'bioplina', 'F1', 'F2', 'F3', 'Tablica', 'Graf', 'SN', 'Interval'];
+  // Define measurement keywords with OCR alternatives
+  const measurementKeywords = [
+    ['CH4', 'CH'],                    // CH4 može biti CH
+    ['CO2', 'RAN', 'C02', 'CO', 'COZ', 'C0Z', 'C0', 'OO2', 'OOZ', '002'],  // CO2 često OCR čita kao "ran", "oo2", "CO" itd.
+    ['O2', '02'],                     // O2 može biti 02
+    ['H2'],                           // H2
+    ['H2S']                           // H2S
+  ];
+  const tempKeywords = ['T-PLINA', 'TPLINA', 'TEMP', 'TELINA', 'T-PUNA', 'TPLUNA'];
   
-  console.log('=== METODA 1: TRAŽENJE S KLJUČNIM RIJEČIMA ===');
+  const results = [];
   
-  const numbersWithKeywords = [];
+  console.log('=== TRAŽENJE BROJEVA PO KLJUČNIM RIJEČIMA ===');
   
-  // Try to find numbers with keywords first
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i].trim();
-    if (!line) continue;
+  // Find each measurement by keyword
+  for (let keywords of measurementKeywords) {
+    const mainKeyword = keywords[0];
+    let found = false;
+    let keywordIndex = -1;
+    let keyword = null;
     
-    // Skip lines with ignore keywords
-    let shouldIgnore = false;
-    for (let keyword of ignoreKeywords) {
-      if (line.toUpperCase().includes(keyword.toUpperCase())) {
-        console.log(`⊗ Preskačem liniju (${keyword}): "${line}"`);
-        shouldIgnore = true;
-        break;
-      }
-    }
-    if (shouldIgnore) continue;
-    
-    // Check if this line contains a valid measurement keyword
-    let foundKeyword = null;
-    for (let keyword of validKeywords) {
-      if (line.toUpperCase().includes(keyword.toUpperCase())) {
-        foundKeyword = keyword;
+    // Try all alternative keywords
+    for (let kw of keywords) {
+      keywordIndex = upperText.indexOf(kw);
+      if (keywordIndex !== -1) {
+        keyword = kw;
         break;
       }
     }
     
-    if (foundKeyword) {
-      console.log(`✓ Pronađena linija (${foundKeyword}): "${line}"`);
+    if (keywordIndex !== -1) {
+      console.log(`✓ Pronađen ${mainKeyword} (kao "${keyword}") na poziciji ${keywordIndex}`);
       
-      // Extract numbers from this line (take the LAST number - it's usually the value)
-      const matches = line.match(/\d+[,.]?\d*/g);
-      if (matches && matches.length > 0) {
-        // Take the last number in the line (rightmost - the actual value)
-        // Skip single digit numbers unless they are the only number in line
-        let lastNum = null;
-        for (let i = matches.length - 1; i >= 0; i--) {
-          const normalized = matches[i].replace(',', '.');
+      // Extract text after keyword (next 20 characters should contain the value)
+      const afterKeyword = text.substring(keywordIndex + keyword.length, keywordIndex + keyword.length + 20);
+      console.log(`  Tekst nakon ${mainKeyword}: "${afterKeyword}"`);
+      
+      // Find all numbers after the keyword
+      // Match patterns like: 0.00, 0,04, 0'00, 13.45, 234
+      const allMatches = afterKeyword.matchAll(/(\d+[',.]?\d*)/g);
+      const numbers = Array.from(allMatches, m => m[1]);
+      
+      console.log(`  Svi brojevi nakon ${mainKeyword}:`, numbers);
+      
+      if (numbers.length > 0) {
+        // Try each number in order
+        for (let i = 0; i < numbers.length; i++) {
+          const numStr = numbers[i];
+          const normalized = numStr.replace(',', '.').replace("'", '.');
           const value = parseFloat(normalized);
-          // Accept if: has decimal point OR is >= 10 OR is the only number
-          if (!isNaN(value) && (normalized.includes('.') || value >= 10 || matches.length === 1)) {
-            lastNum = normalized;
+          
+          console.log(`  Provjeravam broj [${i}]: "${numStr}" → ${value}`);
+          
+          if (!isNaN(value) && value >= 0 && value < 1000) {
+            // Skip if it's just the label digit (2 or 4) and there are more numbers
+            if ((value === 2 || value === 4) && numbers.length > 1 && i === 0) {
+              console.log(`  ⊗ Preskačem ${value} (oznaka)`);
+              continue;
+            }
+            
+            results.push(value);
+            console.log(`  → Uzeta vrijednost: ${value}`);
+            found = true;
             break;
           }
         }
-        
-        if (lastNum) {
-          const value = parseFloat(lastNum);
-          if (!isNaN(value) && value >= 0 && value < 1000) {
-            numbersWithKeywords.push(value);
-            console.log(`  → Broj: ${value} (zadnji valjan broj u liniji)`);
-          }
-        }
       }
+    }
+    
+    if (!found) {
+      results.push(0);
+      console.log(`⚠ ${mainKeyword} nije pronađen, koristim 0`);
     }
   }
   
-  console.log('Pronađeno s ključnim riječima:', numbersWithKeywords.length, 'brojeva');
-  
-  // If we found 6 numbers with keywords, use them
-  if (numbersWithKeywords.length >= 6) {
-    console.log('✅ Koristim brojeve pronađene s ključnim riječima');
-    allNumbers.push(...numbersWithKeywords.slice(0, 6));
-  } else {
-    // FALLBACK: Extract ALL numbers and take first 6
-    console.log('=== METODA 2: UZIMAM PRVIH 6 BROJEVA (FALLBACK) ===');
-    
-    for (let i = 0; i < lines.length; i++) {
-      let line = lines[i].trim();
-      if (!line) continue;
+  // Find temperature
+  let tempFound = false;
+  for (let tempKey of tempKeywords) {
+    const keywordIndex = upperText.indexOf(tempKey);
+    if (keywordIndex !== -1) {
+      console.log(`✓ Pronađena temperatura na poziciji ${keywordIndex}`);
       
-      // Skip obvious ignore lines
-      let shouldIgnore = false;
-      for (let keyword of ignoreKeywords) {
-        if (line.toUpperCase().includes(keyword.toUpperCase())) {
-          shouldIgnore = true;
-          break;
-        }
-      }
-      if (shouldIgnore) continue;
+      const afterKeyword = text.substring(keywordIndex + tempKey.length, keywordIndex + tempKey.length + 20);
+      console.log(`  Tekst nakon temperature: "${afterKeyword}"`);
       
-      // Extract all numbers
-      const matches = line.match(/\d+[,.]?\d*/g);
-      if (matches) {
-        matches.forEach(num => {
-          if (allNumbers.length >= 6) return; // Stop after 6
-          
-          const normalized = num.replace(',', '.');
+      const allMatches = afterKeyword.matchAll(/(\d+[',.]?\d*)/g);
+      const numbers = Array.from(allMatches, m => m[1]);
+      
+      console.log(`  Svi brojevi nakon temperature:`, numbers);
+      
+      if (numbers.length > 0) {
+        // Take the first valid number
+        for (let numStr of numbers) {
+          const normalized = numStr.replace(',', '.').replace("'", '.');
           const value = parseFloat(normalized);
           
-          // Skip small single-digit numbers that are likely part of labels (CO2, H2, etc.)
-          // Accept if: has decimal point OR is >= 10 OR is 0
-          const hasDecimal = normalized.includes('.');
-          const isLargeNumber = value >= 10;
-          const isZero = value === 0;
+          console.log(`  Provjeravam: "${numStr}" → ${value}`);
           
-          if (!isNaN(value) && value >= 0 && value < 1000 && (hasDecimal || isLargeNumber || isZero)) {
-            allNumbers.push(value);
-            console.log(`  → Broj ${allNumbers.length}: ${value} (iz: "${line}")`);
-          } else if (value > 0 && value < 10 && !hasDecimal) {
-            console.log(`  ⊗ Preskačem mali broj: ${value} (vjerojatno dio oznake)`);
+          if (!isNaN(value) && value >= -50 && value <= 150) {
+            results.push(value);
+            console.log(`  → Vrijednost: ${value}`);
+            tempFound = true;
+            break;
           }
-        });
+        }
       }
-      
-      if (allNumbers.length >= 6) break;
+      if (tempFound) break;
     }
   }
   
-  console.log('=== SVI PRONAĐENI BROJEVI ===');
-  console.log('Ukupno brojeva:', allNumbers.length);
-  console.log('Brojevi:', allNumbers);
-  console.log('MRU4U redoslijed: CH4, CO2, O2, H2, H2S, T-plina(temp)');
-  console.log('============================');
+  if (!tempFound) {
+    results.push(0);
+    console.log(`⚠ Temperatura nije pronađena, koristim 0`);
+  }
   
-  // Need at least 6 numbers
-  if (allNumbers.length >= 6) {
-    const ch4 = allNumbers[0];
-    const co2 = allNumbers[1];
-    const o2 = allNumbers[2];
-    const h2 = allNumbers[3];
-    const h2s = allNumbers[4];
-    const temp = allNumbers[5];
+  console.log('=== REZULTATI ===');
+  console.log('Ukupno brojeva:', results.length);
+  
+  if (results.length >= 6) {
+    console.log('CH4:', results[0], '%');
+    console.log('CO2:', results[1], '%');
+    console.log('O2:', results[2], '%');
+    console.log('H2:', results[3], 'ppm');
+    console.log('H2S:', results[4], 'ppm');
+    console.log('T-plina:', results[5], '°C');
+    console.log('=================');
     
-    console.log('=== MAPIRANJE VRIJEDNOSTI ===');
-    console.log('CH4:', ch4, '%');
-    console.log('CO2:', co2, '%');
-    console.log('O2:', o2, '%');
-    console.log('H2:', h2, 'ppm');
-    console.log('H2S:', h2s, 'ppm');
-    console.log('T-plina (Temp):', temp, '°C');
-    console.log('============================');
-    
-    // Fill form fields with validation
-    if (ch4 !== undefined && ch4 >= 0 && ch4 <= 100) {
-      document.getElementById('ch4').value = ch4.toFixed(2);
-      console.log('✓ CH4 popunjeno:', ch4.toFixed(2));
-    }
-    
-    if (co2 !== undefined && co2 >= 0 && co2 <= 100) {
-      document.getElementById('co2').value = co2.toFixed(2);
-      console.log('✓ CO2 popunjeno:', co2.toFixed(2));
-    }
-    
-    if (o2 !== undefined && o2 >= 0 && o2 <= 100) {
-      document.getElementById('o2').value = o2.toFixed(2);
-      console.log('✓ O2 popunjeno:', o2.toFixed(2));
-    }
-    
-    if (h2 !== undefined && h2 >= 0 && h2 < 10000) {
-      document.getElementById('h2').value = Math.round(h2);
-      console.log('✓ H2 popunjeno:', Math.round(h2));
-    }
-    
-    if (h2s !== undefined && h2s >= 0 && h2s < 10000) {
-      document.getElementById('h2s').value = Math.round(h2s);
-      console.log('✓ H2S popunjeno:', Math.round(h2s));
-    }
-    
-    if (temp !== undefined && temp >= -50 && temp <= 150) {
-      document.getElementById('vent-temp').value = temp.toFixed(1);
-      console.log('✓ Temperatura popunjena:', temp.toFixed(1));
-    }
+    // Fill form fields
+    document.getElementById('ch4').value = results[0].toFixed(2);
+    document.getElementById('co2').value = results[1].toFixed(2);
+    document.getElementById('o2').value = results[2].toFixed(2);
+    document.getElementById('h2').value = Math.round(results[3]);
+    document.getElementById('h2s').value = Math.round(results[4]);
+    document.getElementById('vent-temp').value = results[5].toFixed(1);
     
     console.log('✅ Sva polja uspjesno popunjena!');
     return true;
   } else {
-    console.log('⚠️ Pronadjeno samo', allNumbers.length, 'brojeva. Potrebno je najmanje 6.');
-    console.log('📋 Sve linije teksta:');
-    lines.forEach((line, idx) => {
-      if (line.trim()) console.log(`  ${idx + 1}: "${line}"`);
-    });
+    console.log('⚠️ Nedovoljno podataka');
     return false;
   }
 }
