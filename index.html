@@ -1881,4 +1881,30 @@ function initApp() {
   document.getElementById('refresh-weather-btn').addEventListener('click', autoFillWeatherData);
   document.getElementById('vent-list').addEventListener('click', e => {
     const row = e.target.closest('tr');
-    
+    if (!row) return;
+    const index = Array.from(row.parentNode.children).indexOf(row);
+    editVent(index);
+  });
+  // Dodaj event listener za promjenu statusa
+  document.querySelectorAll('input[name="vent-status"]').forEach(radio => {
+    radio.addEventListener('change', toggleVentFields);
+  });
+  
+  document.getElementById('vent-form').addEventListener('submit', e => {
+    e.preventDefault();
+    saveVentData();
+  });
+  document.getElementById('finish-measurement').addEventListener('click', finishMeasurement);
+  document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
+  document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
+  updateHistoryList();
+  if (localStorage.getItem('tempMeasurement') === null || !JSON.parse(localStorage.getItem('tempMeasurement')).landfill) {
+      showScreen('password-screen');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+</script>
+
+</body>
+</html>
