@@ -503,6 +503,22 @@ textarea {
 </style>
 </head>
 <body>
+<div class="screen" id="password-screen">
+  <div class="login-container">
+    <div class="login-header">
+      <h1>♻️ Mjerenje odlagališnih plinova</h1>
+      <p style="color:#666;margin:10px 0;">Unesite pristupni kod:</p>
+    </div>
+    <form autocomplete="off" id="password-form">
+      <label for="password-input">Pristupni kod:</label>
+      <input type="password" id="password-input" placeholder="Unesite kod" required autofocus>
+      <button type="submit">Prijavi se</button>
+    </form>
+    <div class="login-footer">
+      <p>Sustav za praćenje emisija plinova iz odlagališta otpada</p>
+    </div>
+  </div>
+</div>
 <div class="screen" id="login-screen">
   <div class="login-container">
     <div class="login-header">
@@ -958,7 +974,7 @@ function resetToLogin() {
   };
   localStorage.removeItem('tempMeasurement');
   clearMeasurementForm();
-  showScreen('login-screen');
+  showScreen('password-screen');
 }
 
 function safeResetToLogin() {
@@ -1778,9 +1794,19 @@ function initApp() {
     }
   }
 
+  document.getElementById('password-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const p = document.getElementById('password-input').value;
+    const c = atob('MzczNw=='); // Obfuskirana lozinka
+    if (p !== c) {
+      alert("Neispravan pristupni kod!");
+      return;
+    }
+    showScreen('login-screen');
+  });
+  
   document.getElementById('login-form').addEventListener('submit', e => {
     e.preventDefault();
-    
     state.currentMeasurer = document.getElementById('measurer-select').value;
     state.currentDevice = document.getElementById('device-select').value;
     if (!state.currentMeasurer || !state.currentDevice) {
@@ -1855,30 +1881,4 @@ function initApp() {
   document.getElementById('refresh-weather-btn').addEventListener('click', autoFillWeatherData);
   document.getElementById('vent-list').addEventListener('click', e => {
     const row = e.target.closest('tr');
-    if (!row) return;
-    const index = Array.from(row.parentNode.children).indexOf(row);
-    editVent(index);
-  });
-  // Dodaj event listener za promjenu statusa
-  document.querySelectorAll('input[name="vent-status"]').forEach(radio => {
-    radio.addEventListener('change', toggleVentFields);
-  });
-  
-  document.getElementById('vent-form').addEventListener('submit', e => {
-    e.preventDefault();
-    saveVentData();
-  });
-  document.getElementById('finish-measurement').addEventListener('click', finishMeasurement);
-  document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
-  document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
-  updateHistoryList();
-  if (localStorage.getItem('tempMeasurement') === null || !JSON.parse(localStorage.getItem('tempMeasurement')).landfill) {
-      showScreen('login-screen');
-  }
-}
-
-document.addEventListener('DOMContentLoaded', initApp);
-</script>
-
-</body>
-</html>
+    
