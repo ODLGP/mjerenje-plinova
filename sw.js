@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mop-mjerenje-v15';
+const CACHE_NAME = 'mop-mjerenje-v17';
 const urlsToCache = [
   './index.html',
   './manifest.json',
