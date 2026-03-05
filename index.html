@@ -1420,67 +1420,197 @@ function getWindDirection(degrees) {
 }
 
 // Funkcija za automatsko formatiranje decimala za CH4, CO2, O2
-function autoFormatDecimal(inputElement) {
+function autoFormatDecimal(inputElement, nextInputId, maxDecimals) {
+  maxDecimals = maxDecimals || 2; // Default 2 decimale
+  
+  // Ukloni stare event listenere ako postoje
+  const newInput = inputElement.cloneNode(true);
+  inputElement.parentNode.replaceChild(newInput, inputElement);
+  inputElement = newInput;
+  
   inputElement.addEventListener('input', function(e) {
-    let value = this.value.replace(/[^\d]/g, ''); // Ukloni sve osim brojeva
+    let value = this.value;
+    const oldValue = value;
     
-    if (value.length === 0) return;
-    
-    // Ograniči na maksimalno 4 znamenke (100.00)
-    if (value.length > 4) {
-      value = value.slice(0, 4);
+    // Zamijeni zarez s točkom
+    if (value.includes(',')) {
+      value = value.replace(',', '.');
     }
     
-    // Ako ima 3 ili 4 znamenke, automatski dodaj točku
-    if (value.length >= 3) {
-      const intPart = value.slice(0, -2);
-      const decPart = value.slice(-2);
-      this.value = intPart + '.' + decPart;
+    // Ako ima točku
+    if (value.includes('.')) {
+      // Split po točki
+      const dotIndex = value.indexOf('.');
+      let beforeDot = value.substring(0, dotIndex);
+      let afterDot = value.substring(dotIndex + 1);
       
-      // Provjeri da li je vrijednost > 100
-      const numValue = parseFloat(this.value);
-      if (numValue > 100) {
-        this.value = '100.00';
+      // Očisti sve osim brojeva
+      beforeDot = beforeDot.replace(/[^\d]/g, '');
+      afterDot = afterDot.replace(/[^\d.]/g, '').replace(/\./g, ''); // Ukloni dodatne točke
+      
+      // Ograniči
+      beforeDot = beforeDot.slice(0, 2);
+      afterDot = afterDot.slice(0, maxDecimals);
+      
+      // Postavi vrijednost SAMO ako je različita
+      const newValue = beforeDot + '.' + afterDot;
+      if (newValue !== oldValue) {
+        this.value = newValue;
+      }
+      
+      // Ako ima potreban broj decimala, pređi na sljedeće polje
+      if (afterDot.length >= maxDecimals && nextInputId) {
+        setTimeout(() => {
+          const nextInput = document.getElementById(nextInputId);
+          if (nextInput) nextInput.focus();
+        }, 50);
+      }
+      return;
+    }
+    
+    // Ako nema točku - samo brojevi
+    value = value.replace(/[^\d]/g, '');
+    
+    if (value.length === 0) {
+      if (this.value !== '') {
+        this.value = '';
+      }
+      return;
+    }
+    
+    // Ograniči na 4 znamenke (ili 3 za 1 decimalu)
+    const maxDigits = 2 + maxDecimals;
+    if (value.length > maxDigits) {
+      value = value.slice(0, maxDigits);
+    }
+    
+    // Ako ima dovoljno znamenki, automatski formatiraj
+    if (value.length === maxDigits) {
+      const formatted = value.slice(0, -maxDecimals) + '.' + value.slice(-maxDecimals);
+      
+      if (parseFloat(formatted) > 99.99) {
+        this.value = '99.99';
+      } else {
+        this.value = formatted;
+      }
+      
+      if (nextInputId) {
+        setTimeout(() => {
+          const nextInput = document.getElementById(nextInputId);
+          if (nextInput) nextInput.focus();
+        }, 50);
       }
     } else {
+      if (this.value !== value) {
+        this.value = value;
+      }
+    }
+  });
+  
+  inputElement.addEventListener('blur', function() {
+    if (parseFloat(this.value) > 99.99) {
+      this.value = '99.99';
+    }
+  });
+  
+  return inputElement;
+}
+
+// Funkcija za formatiranje cijelog broja (H2, H2S)
+function autoFormatInteger(inputElement) {
+  // Ukloni stare event listenere ako postoje
+  const newInput = inputElement.cloneNode(true);
+  inputElement.parentNode.replaceChild(newInput, inputElement);
+  inputElement = newInput;
+  
+  inputElement.addEventListener('input', function(e) {
+    let value = this.value;
+    
+    // Samo brojevi, bez decimala
+    value = value.replace(/[^\d]/g, '');
+    
+    if (this.value !== value) {
       this.value = value;
     }
   });
   
-  // Dozvoli ručni unos točke
-  inputElement.addEventListener('keydown', function(e) {
-    if (e.key === '.' || e.key === ',') {
-      e.preventDefault();
-      const cursorPos = this.selectionStart;
-      const currentValue = this.value;
+  return inputElement;
+}
+
+// Funkcija za formatiranje temperature (1 decimala)
+function autoFormatTemperature(inputElement) {
+  // Ukloni stare event listenere ako postoje
+  const newInput = inputElement.cloneNode(true);
+  inputElement.parentNode.replaceChild(newInput, inputElement);
+  inputElement = newInput;
+  
+  inputElement.addEventListener('input', function(e) {
+    let value = this.value;
+    const oldValue = value;
+    
+    // Zamijeni zarez s točkom
+    if (value.includes(',')) {
+      value = value.replace(',', '.');
+    }
+    
+    // Ako ima točku
+    if (value.includes('.')) {
+      const dotIndex = value.indexOf('.');
+      let beforeDot = value.substring(0, dotIndex);
+      let afterDot = value.substring(dotIndex + 1);
       
-      // Dodaj točku samo ako već nema
-      if (!currentValue.includes('.')) {
-        this.value = currentValue.slice(0, cursorPos) + '.' + currentValue.slice(cursorPos);
-        this.setSelectionRange(cursorPos + 1, cursorPos + 1);
+      // Očisti sve osim brojeva
+      beforeDot = beforeDot.replace(/[^\d]/g, '');
+      afterDot = afterDot.replace(/[^\d.]/g, '').replace(/\./g, '');
+      
+      // Ograniči na 1 decimalu
+      afterDot = afterDot.slice(0, 1);
+      
+      const newValue = beforeDot + '.' + afterDot;
+      if (newValue !== oldValue) {
+        this.value = newValue;
       }
+      return;
+    }
+    
+    // Ako nema točku - samo brojevi
+    value = value.replace(/[^\d]/g, '');
+    
+    if (this.value !== value) {
+      this.value = value;
     }
   });
   
-  // Dodatna provjera pri blur (kad napustiš polje)
-  inputElement.addEventListener('blur', function() {
-    const numValue = parseFloat(this.value);
-    if (numValue > 100) {
-      this.value = '100.00';
-    }
-  });
+  return inputElement;
 }
 
-// Primijeni auto-formatiranje na CH4, CO2, O2 polja
-document.addEventListener('DOMContentLoaded', function() {
+// Funkcija za primjenu auto-formatiranja na sva polja
+function applyAutoFormatting() {
   const ch4Input = document.getElementById('ch4');
   const co2Input = document.getElementById('co2');
   const o2Input = document.getElementById('o2');
+  const h2Input = document.getElementById('h2');
+  const h2sInput = document.getElementById('h2s');
+  const tempInput = document.getElementById('vent-temp');
   
-  if (ch4Input) autoFormatDecimal(ch4Input);
-  if (co2Input) autoFormatDecimal(co2Input);
-  if (o2Input) autoFormatDecimal(o2Input);
-});
+  if (!ch4Input || !co2Input || !o2Input) return;
+  
+  // Provjeri koji je uređaj odabran
+  const isMRU = state.currentDevice === 'MRU Optima Biogas';
+  const decimals = isMRU ? 2 : 1; // MRU Optima = 2 decimale, GA5000 = 1 decimala
+  
+  // Primijeni formatiranje na CH4, CO2, O2
+  autoFormatDecimal(ch4Input, 'co2', decimals);
+  autoFormatDecimal(co2Input, 'o2', decimals);
+  autoFormatDecimal(o2Input, 'h2', decimals);
+  
+  // H2 i H2S - samo cijeli brojevi
+  if (h2Input) autoFormatInteger(h2Input);
+  if (h2sInput) autoFormatInteger(h2sInput);
+  
+  // Temperatura - 1 decimala za oba uređaja
+  if (tempInput) autoFormatTemperature(tempInput);
+}
 
 // Funkcija za postavljanje trenutnog vremena
 function setCurrentTime() {
@@ -1534,115 +1664,6 @@ async function autoFillWeatherData() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  // Dodaj validaciju za decimalna mjesta na input poljima
-  document.getElementById('ch4').addEventListener('input', function(e) {
-    let val = e.target.value;
-    if (val.includes('.')) {
-      let parts = val.split('.');
-      if (parts[1]) {
-        // MRU Optima Biogas: 2 decimale, GA5000: 1 decimala
-        const maxDecimals = state.currentDevice === 'MRU Optima Biogas' ? 2 : 1;
-        if (parts[1].length > maxDecimals) {
-          e.target.value = parseFloat(val).toFixed(maxDecimals);
-        }
-      }
-    }
-  });
-  
-  document.getElementById('co2').addEventListener('input', function(e) {
-    let val = e.target.value;
-    if (val.includes('.')) {
-      let parts = val.split('.');
-      if (parts[1]) {
-        // MRU Optima Biogas: 2 decimale, GA5000: 1 decimala
-        const maxDecimals = state.currentDevice === 'MRU Optima Biogas' ? 2 : 1;
-        if (parts[1].length > maxDecimals) {
-          e.target.value = parseFloat(val).toFixed(maxDecimals);
-        }
-      }
-    }
-  });
-  
-  document.getElementById('o2').addEventListener('input', function(e) {
-    let val = e.target.value;
-    if (val.includes('.')) {
-      let parts = val.split('.');
-      if (parts[1]) {
-        // MRU Optima Biogas: 2 decimale, GA5000: 1 decimala
-        const maxDecimals = state.currentDevice === 'MRU Optima Biogas' ? 2 : 1;
-        if (parts[1].length > maxDecimals) {
-          e.target.value = parseFloat(val).toFixed(maxDecimals);
-        }
-      }
-    }
-  });
-  
-  document.getElementById('h2').addEventListener('input', function(e) {
-    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
-    // Ukloni sve decimale
-    e.target.value = e.target.value.replace(/\./g, '').replace(/[^\d]/g, '');
-  });
-  
-  document.getElementById('h2s').addEventListener('input', function(e) {
-    if (state.currentDevice !== 'MRU Optima Biogas') return; // Samo za MRU
-    // Ukloni sve decimale
-    e.target.value = e.target.value.replace(/\./g, '').replace(/[^\d]/g, '');
-  });
-  
-  document.getElementById('vent-temp').addEventListener('input', function(e) {
-    let val = e.target.value;
-    if (val.includes('.')) {
-      let parts = val.split('.');
-      if (parts[1] && parts[1].length > 1) {
-        e.target.value = parseFloat(val).toFixed(1);
-      }
-    }
-  });
-  
-  document.getElementById('vent-select-confirm').onclick = function() {
-    const dropdown = document.getElementById('vent-select-dropdown');
-    const selected = dropdown.value;
-    if (!selected) {
-      alert("Odaberite odušnik!");
-      return;
-    }
-    document.getElementById('vent-name').value = selected;
-    document.getElementById('vent-index').value = -1;
-    document.getElementById('vent-form').reset();
-    document.getElementById('vent-name').value = selected;
-    document.getElementById('vent-form').style.display = 'block';
-    updateInputSteps();
-    
-    // Load previous measurement for comparison
-    loadPreviousMeasurement(selected);
-    
-    closeVentSelectModal();
-  };
-  document.getElementById('manual-vent-open').onclick = function(e) {
-    e.preventDefault();
-    closeVentSelectModal();
-    openManualVentModal();
-  };
-  document.getElementById('manual-vent-confirm').onclick = function() {
-    const name = document.getElementById('manual-vent-input').value.trim();
-    if (!name) {
-      alert("Unesi naziv novog odušnika!");
-      return;
-    }
-    document.getElementById('vent-name').value = name;
-    document.getElementById('vent-index').value = -1;
-    document.getElementById('vent-form').reset();
-    document.getElementById('vent-name').value = name;
-    document.getElementById('vent-form').style.display = 'block';
-    updateInputSteps();
-    
-    // Load previous measurement for comparison
-    loadPreviousMeasurement(name);
-    
-    closeManualVentModal();
-  };
-});
 function editVent(index) {
   const vent = state.currentMeasurement.vents[index];
   if (!vent) return;
@@ -1677,6 +1698,9 @@ function updateInputSteps() {
   document.getElementById('h2').step = '1';
   document.getElementById('h2s').step = '1';
   document.getElementById('vent-temp').step = '0.1';
+  
+  // Primijeni auto-formatiranje
+  applyAutoFormatting();
 }
 
 function deleteVent(index) {
@@ -2362,6 +2386,93 @@ function initApp() {
   document.getElementById('finish-measurement').addEventListener('click', finishMeasurement);
   document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
   document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
+  
+  // Event listeneri za modale
+  document.getElementById('vent-select-confirm').onclick = function() {
+    const dropdown = document.getElementById('vent-select-dropdown');
+    const selected = dropdown.value;
+    if (!selected) {
+      alert("Odaberite odušnik!");
+      return;
+    }
+    document.getElementById('vent-name').value = selected;
+    document.getElementById('vent-index').value = -1;
+    document.getElementById('vent-form').reset();
+    document.getElementById('vent-name').value = selected;
+    document.getElementById('vent-form').style.display = 'block';
+    updateInputSteps();
+    loadPreviousMeasurement(selected);
+    closeVentSelectModal();
+  };
+  
+  document.getElementById('manual-vent-open').onclick = function(e) {
+    e.preventDefault();
+    closeVentSelectModal();
+    openManualVentModal();
+  };
+  
+  document.getElementById('manual-vent-confirm').onclick = function() {
+    const name = document.getElementById('manual-vent-input').value.trim();
+    if (!name) {
+      alert("Unesi naziv novog odušnika!");
+      return;
+    }
+    document.getElementById('vent-name').value = name;
+    document.getElementById('vent-index').value = -1;
+    document.getElementById('vent-form').reset();
+    document.getElementById('vent-name').value = name;
+    document.getElementById('vent-form').style.display = 'block';
+    updateInputSteps();
+    loadPreviousMeasurement(name);
+    closeManualVentModal();
+  };
+  
+  // Validacija za H2 i H2S - samo cijeli brojevi (bez decimala)
+  document.getElementById('h2').addEventListener('input', function(e) {
+    this.value = this.value.replace(/[^\d]/g, ''); // Samo brojevi, bez decimala
+  });
+  
+  document.getElementById('h2s').addEventListener('input', function(e) {
+    this.value = this.value.replace(/[^\d]/g, ''); // Samo brojevi, bez decimala
+  });
+  
+  // Validacija za temperaturu - max 1 decimala
+  document.getElementById('vent-temp').addEventListener('input', function(e) {
+    let value = this.value;
+    const oldValue = value;
+    
+    // Zamijeni zarez s točkom
+    if (value.includes(',')) {
+      value = value.replace(',', '.');
+    }
+    
+    // Ako ima točku
+    if (value.includes('.')) {
+      const dotIndex = value.indexOf('.');
+      let beforeDot = value.substring(0, dotIndex);
+      let afterDot = value.substring(dotIndex + 1);
+      
+      // Očisti sve osim brojeva
+      beforeDot = beforeDot.replace(/[^\d]/g, '');
+      afterDot = afterDot.replace(/[^\d.]/g, '').replace(/\./g, '');
+      
+      // Ograniči na 1 decimalu
+      afterDot = afterDot.slice(0, 1);
+      
+      // Postavi vrijednost SAMO ako je različita
+      const newValue = beforeDot + '.' + afterDot;
+      if (newValue !== oldValue) {
+        this.value = newValue;
+      }
+    } else {
+      // Samo brojevi
+      value = value.replace(/[^\d]/g, '');
+      if (this.value !== value) {
+        this.value = value;
+      }
+    }
+  });
+  
   updateHistoryList();
   if (localStorage.getItem('tempMeasurement') === null || !JSON.parse(localStorage.getItem('tempMeasurement')).landfill) {
       showScreen('password-screen');
