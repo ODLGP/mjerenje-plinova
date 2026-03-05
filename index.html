@@ -736,18 +736,35 @@ textarea {
 }
 .image-zoom-content {
   position: relative;
-  max-width: 95%;
-  max-height: 95%;
+  max-width: 95vw;
+  max-height: 85vh;
   overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.image-zoom-content img {
+.image-zoom-content .map-container {
+  position: relative;
+  display: inline-block;
+  cursor: grab;
+  transition: transform 0.2s ease;
+}
+.image-zoom-content .map-container.dragging {
+  cursor: grabbing;
+}
+.image-zoom-content .map-container img {
+  display: block;
+  max-width: none;
   width: auto;
   height: auto;
-  max-width: none;
-  cursor: grab;
 }
-.image-zoom-content img.dragging {
-  cursor: grabbing;
+.image-zoom-content .vent-marker {
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.image-zoom-content .vent-marker:hover {
+  transform: translate(-50%, -50%) scale(1.8) !important;
 }
 .zoom-close {
   position: fixed;
@@ -3120,8 +3137,7 @@ function initImageZoom() {
   modal.id = 'image-zoom-modal';
   modal.innerHTML = `
     <span class="zoom-close" onclick="closeImageZoom()">&times;</span>
-    <div class="image-zoom-content">
-      <img id="zoomed-image" src="" alt="Zoom">
+    <div class="image-zoom-content" id="zoom-content-wrapper">
     </div>
     <div class="zoom-controls">
       <button class="zoom-btn" onclick="zoomIn()">+</button>
@@ -3135,32 +3151,66 @@ function initImageZoom() {
   let isDragging = false;
   let startX, startY, scrollLeft, scrollTop;
   
-  const zoomedImg = modal.querySelector('#zoomed-image');
   const content = modal.querySelector('.image-zoom-content');
   
-  zoomedImg.addEventListener('mousedown', (e) => {
+  content.addEventListener('mousedown', (e) => {
+    // Don't start dragging if clicking on a marker
+    if (e.target.classList.contains('vent-marker')) return;
+    
     isDragging = true;
-    zoomedImg.classList.add('dragging');
-    startX = e.pageX - content.offsetLeft;
-    startY = e.pageY - content.offsetTop;
+    content.style.cursor = 'grabbing';
+    startX = e.clientX;
+    startY = e.clientY;
     scrollLeft = content.scrollLeft;
     scrollTop = content.scrollTop;
   });
   
   document.addEventListener('mouseup', () => {
     isDragging = false;
-    zoomedImg.classList.remove('dragging');
+    if (content) content.style.cursor = 'grab';
   });
   
   document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
     e.preventDefault();
-    const x = e.pageX - content.offsetLeft;
-    const y = e.pageY - content.offsetTop;
-    const walkX = (x - startX) * 2;
-    const walkY = (y - startY) * 2;
-    content.scrollLeft = scrollLeft - walkX;
-    content.scrollTop = scrollTop - walkY;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    content.scrollLeft = scrollLeft - dx;
+    content.scrollTop = scrollTop - dy;
+  });
+  
+  // Mouse wheel zoom
+  content.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const container = document.querySelector('#zoomed-map-container');
+    if (!container) return;
+    
+    // Get mouse position relative to container
+    const rect = content.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Get scroll position before zoom
+    const scrollX = content.scrollLeft;
+    const scrollY = content.scrollTop;
+    
+    // Calculate mouse position relative to content
+    const mouseX = x + scrollX;
+    const mouseY = y + scrollY;
+    
+    // Zoom
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    const newZoom = Math.max(0.5, Math.min(3, currentZoom + delta));
+    
+    if (newZoom !== currentZoom) {
+      const zoomRatio = newZoom / currentZoom;
+      currentZoom = newZoom;
+      container.style.transform = `scale(${currentZoom})`;
+      
+      // Adjust scroll to keep mouse position
+      content.scrollLeft = mouseX * zoomRatio - x;
+      content.scrollTop = mouseY * zoomRatio - y;
+    }
   });
 }
 
@@ -3168,33 +3218,84 @@ let currentZoom = 1;
 
 function openImageZoom(src) {
   const modal = document.getElementById('image-zoom-modal');
-  const img = modal.querySelector('#zoomed-image');
-  img.src = src;
+  const contentWrapper = modal.querySelector('#zoom-content-wrapper');
+  
+  // Get the original map container
+  const originalMapImg = document.getElementById('landfill-map');
+  const originalContainer = originalMapImg.parentElement;
+  
+  // Clone the entire map container with markers
+  const clonedContainer = originalContainer.cloneNode(true);
+  clonedContainer.id = 'zoomed-map-container';
+  
+  // Clear previous content
+  contentWrapper.innerHTML = '';
+  contentWrapper.appendChild(clonedContainer);
+  
+  // Set initial zoom
   currentZoom = 1;
-  img.style.transform = `scale(${currentZoom})`;
+  clonedContainer.style.transform = `scale(${currentZoom})`;
+  clonedContainer.style.transformOrigin = 'top left';
+  
+  // Add click handlers to cloned markers
+  const clonedMarkers = clonedContainer.querySelectorAll('.vent-marker');
+  clonedMarkers.forEach(marker => {
+    marker.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ventName = marker.getAttribute('data-vent-name');
+      if (ventName) {
+        closeImageZoom();
+        openVentForm(ventName);
+      }
+    });
+  });
+  
   modal.classList.add('active');
 }
 
 function closeImageZoom() {
   const modal = document.getElementById('image-zoom-modal');
   modal.classList.remove('active');
+  
+  // Clear content
+  const contentWrapper = modal.querySelector('#zoom-content-wrapper');
+  if (contentWrapper) {
+    contentWrapper.innerHTML = '';
+  }
+  
+  // Reset zoom
+  currentZoom = 1;
 }
 
 function zoomIn() {
   currentZoom += 0.25;
   if (currentZoom > 3) currentZoom = 3;
-  document.querySelector('#zoomed-image').style.transform = `scale(${currentZoom})`;
+  const container = document.querySelector('#zoomed-map-container');
+  if (container) {
+    container.style.transform = `scale(${currentZoom})`;
+  }
 }
 
 function zoomOut() {
   currentZoom -= 0.25;
   if (currentZoom < 0.5) currentZoom = 0.5;
-  document.querySelector('#zoomed-image').style.transform = `scale(${currentZoom})`;
+  const container = document.querySelector('#zoomed-map-container');
+  if (container) {
+    container.style.transform = `scale(${currentZoom})`;
+  }
 }
 
 function resetZoom() {
   currentZoom = 1;
-  document.querySelector('#zoomed-image').style.transform = `scale(${currentZoom})`;
+  const container = document.querySelector('#zoomed-map-container');
+  const content = document.querySelector('#zoom-content-wrapper');
+  if (container) {
+    container.style.transform = `scale(${currentZoom})`;
+  }
+  if (content) {
+    content.scrollLeft = 0;
+    content.scrollTop = 0;
+  }
 }
 
 // Initialize all new features
