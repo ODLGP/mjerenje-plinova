@@ -930,6 +930,23 @@ textarea {
   <h1 id="landfill-name-display"></h1>
   
   <img id="landfill-map" src="https://via.placeholder.com/800x500?text=Karta+odlagališta">
+  
+  <!-- Legenda -->
+  <div style="display:flex;gap:20px;justify-content:center;align-items:center;margin:15px 0;padding:15px;background:rgba(255,255,255,0.9);border-radius:8px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:16px;height:16px;background:#f44336;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+      <span style="font-size:14px;color:#333;font-weight:500;">Nije izmjeren</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:16px;height:16px;background:#4caf50;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+      <span style="font-size:14px;color:#333;font-weight:500;">Izmjeren</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:16px;height:16px;background:#9e9e9e;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+      <span style="font-size:14px;color:#333;font-weight:500;">Ne može se izmjeriti</span>
+    </div>
+  </div>
+  
   <div style="display:flex;gap:10px;justify-content:center;margin-bottom:10px;">
     <button id="add-vent-btn" style="flex:1;">Unesi novi odušnik</button>
   </div>
@@ -1401,6 +1418,69 @@ function getWindDirection(degrees) {
   const index = Math.round(degrees / 22.5) % 16;
   return directions[index];
 }
+
+// Funkcija za automatsko formatiranje decimala za CH4, CO2, O2
+function autoFormatDecimal(inputElement) {
+  inputElement.addEventListener('input', function(e) {
+    let value = this.value.replace(/[^\d]/g, ''); // Ukloni sve osim brojeva
+    
+    if (value.length === 0) return;
+    
+    // Ograniči na maksimalno 4 znamenke (100.00)
+    if (value.length > 4) {
+      value = value.slice(0, 4);
+    }
+    
+    // Ako ima 3 ili 4 znamenke, automatski dodaj točku
+    if (value.length >= 3) {
+      const intPart = value.slice(0, -2);
+      const decPart = value.slice(-2);
+      this.value = intPart + '.' + decPart;
+      
+      // Provjeri da li je vrijednost > 100
+      const numValue = parseFloat(this.value);
+      if (numValue > 100) {
+        this.value = '100.00';
+      }
+    } else {
+      this.value = value;
+    }
+  });
+  
+  // Dozvoli ručni unos točke
+  inputElement.addEventListener('keydown', function(e) {
+    if (e.key === '.' || e.key === ',') {
+      e.preventDefault();
+      const cursorPos = this.selectionStart;
+      const currentValue = this.value;
+      
+      // Dodaj točku samo ako već nema
+      if (!currentValue.includes('.')) {
+        this.value = currentValue.slice(0, cursorPos) + '.' + currentValue.slice(cursorPos);
+        this.setSelectionRange(cursorPos + 1, cursorPos + 1);
+      }
+    }
+  });
+  
+  // Dodatna provjera pri blur (kad napustiš polje)
+  inputElement.addEventListener('blur', function() {
+    const numValue = parseFloat(this.value);
+    if (numValue > 100) {
+      this.value = '100.00';
+    }
+  });
+}
+
+// Primijeni auto-formatiranje na CH4, CO2, O2 polja
+document.addEventListener('DOMContentLoaded', function() {
+  const ch4Input = document.getElementById('ch4');
+  const co2Input = document.getElementById('co2');
+  const o2Input = document.getElementById('o2');
+  
+  if (ch4Input) autoFormatDecimal(ch4Input);
+  if (co2Input) autoFormatDecimal(co2Input);
+  if (o2Input) autoFormatDecimal(o2Input);
+});
 
 // Funkcija za postavljanje trenutnog vremena
 function setCurrentTime() {
