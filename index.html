@@ -1122,6 +1122,179 @@ textarea {
 </div>
 <script>
   
+// === LOAD CUSTOM DATA FROM ADMIN PANEL ===
+
+// Extract city name from landfill name
+function extractCityFromLandfillName(name) {
+  // Remove common prefixes
+  let cityName = name
+    .replace(/^Odlagalište otpada\s*/i, '')
+    .replace(/^Odlagalište\s*/i, '')
+    .trim();
+  
+  // If there's a dash, take the part after it (e.g., "Split - Karepovac" -> "Split")
+  if (cityName.includes(' - ')) {
+    cityName = cityName.split(' - ')[0].trim();
+  }
+  
+  // If there's multiple words, take the first significant one
+  const parts = cityName.split(' - ');
+  if (parts.length > 1) {
+    cityName = parts[parts.length - 1].trim();
+  }
+  
+  return cityName;
+}
+
+// Get coordinates for a city using Nominatim Geocoding API
+async function getCoordinatesForCity(cityName) {
+  try {
+    // Use Nominatim (OpenStreetMap) geocoding API
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityName)},Croatia&format=json&limit=1`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'MOP-Aplikacija/1.0'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Geocoding API error');
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.length > 0) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lon: parseFloat(data[0].lon),
+        found: true
+      };
+    }
+  } catch (error) {
+    console.error('Error fetching coordinates for city:', error);
+  }
+  
+  // Return not found status
+  return { lat: null, lon: null, found: false };
+}
+
+// Extract coordinates from Google Maps link
+function extractCoordinatesFromMapsLink(mapsLink) {
+  if (!mapsLink) return { lat: null, lon: null };
+  
+  try {
+    // Try to find coordinates in the URL
+    // Pattern: @lat,lon or q=lat,lon or /lat,lon
+    const patterns = [
+      /@(-?\d+\.\d+),(-?\d+\.\d+)/,  // @45.8150,15.9819
+      /q=(-?\d+\.\d+),(-?\d+\.\d+)/, // q=45.8150,15.9819
+      /\/(-?\d+\.\d+),(-?\d+\.\d+)/, // /45.8150,15.9819
+    ];
+    
+    for (const pattern of patterns) {
+      const match = mapsLink.match(pattern);
+      if (match) {
+        return {
+          lat: parseFloat(match[1]),
+          lon: parseFloat(match[2])
+        };
+      }
+    }
+  } catch (e) {
+    console.error('Error extracting coordinates:', e);
+  }
+  
+  return { lat: null, lon: null };
+}
+
+function loadCustomLandfills() {
+  const customLandfills = JSON.parse(localStorage.getItem('landfills') || '[]');
+  return customLandfills.map(custom => {
+    // Extract coordinates from maps link if available
+    let coords = extractCoordinatesFromMapsLink(custom.mapsLink);
+    
+    // Use stored coordinates or extracted coordinates or default
+    const lat = custom.lat || coords.lat || 45.8150;
+    const lon = custom.lon || coords.lon || 15.9819;
+    
+    return {
+      id: custom.id,
+      name: custom.name,
+      image: custom.image,
+      lat: lat,
+      lon: lon,
+      mapsLink: custom.mapsLink || '',
+      client: custom.info?.contact || 'Custom landfill',
+      reportTitle: 'ISPITNI IZVJEŠTAJ - ' + custom.name,
+      info: custom.info || {}
+    };
+  });
+}
+
+function loadCustomVents() {
+  const customLandfills = JSON.parse(localStorage.getItem('landfills') || '[]');
+  const additionalVents = JSON.parse(localStorage.getItem('additionalVents') || '{}');
+  const hiddenVents = JSON.parse(localStorage.getItem('hiddenVents') || '{}');
+  
+  console.log('=== loadCustomVents called ===');
+  console.log('Loading custom vents:', { customLandfills, additionalVents, hiddenVents });
+  
+  const vents = {};
+  
+  // Add custom landfills vents
+  customLandfills.forEach(custom => {
+    vents[custom.id] = custom.vents || [];
+  });
+  
+  console.log('Returning:', { customVents: vents, additionalVents: additionalVents, hiddenVents: hiddenVents });
+  
+  // Return object that will be used to extend built-in vents
+  return { customVents: vents, additionalVents: additionalVents, hiddenVents: hiddenVents };
+}
+
+function mergeVents(builtInVents, customData) {
+  console.log('=== mergeVents called ===');
+  console.log('builtInVents:', builtInVents);
+  console.log('customData:', customData);
+  
+  const result = {...builtInVents};
+  
+  // Remove hidden vents from built-in landfills
+  Object.keys(customData.hiddenVents || {}).forEach(landfillId => {
+    const id = parseInt(landfillId);
+    if (result[id]) {
+      console.log(`Removing hidden vents from landfill ${id}:`, customData.hiddenVents[landfillId]);
+      result[id] = result[id].filter(v => !customData.hiddenVents[landfillId].includes(v));
+      console.log(`Result for landfill ${id} after hiding:`, result[id]);
+    }
+  });
+  
+  // Add additional vents to built-in landfills
+  Object.keys(customData.additionalVents).forEach(landfillId => {
+    const id = parseInt(landfillId);
+    if (result[id]) {
+      console.log(`Merging additional vents for landfill ${id}:`, customData.additionalVents[landfillId]);
+      result[id] = [...result[id], ...customData.additionalVents[landfillId]];
+      console.log(`Result for landfill ${id}:`, result[id]);
+    }
+  });
+  
+  // Add custom landfills
+  Object.keys(customData.customVents).forEach(landfillId => {
+    result[landfillId] = customData.customVents[landfillId];
+  });
+  
+  console.log('Final merged vents:', result);
+  return result;
+}
+
+function loadCustomCoordinates() {
+  const coords = JSON.parse(localStorage.getItem('coordinates') || '{}');
+  console.log('Loading custom coordinates:', coords);
+  return coords;
+}
+
 // --- Custom device dropdown ---
 const DEVICES = [
   {
@@ -1198,7 +1371,7 @@ const MEASURERS = [
   'Luka Guštin',
   'Tomislav Harambašić'
 ];
-const VENTS_BY_LANDFILL = {
+const BUILTIN_VENTS = {
   1: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21"],
   2: ["A1", "A2", "A4", "A6", "A7", "A8", "B3", "B5", "Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10", "Z11", "Z12", "Z13", "Z14", "Z15", "Z16", "Z17", "Z18", "Z19"],
   3: ["1-3", "2-2", "2-3", "2-4", "3-2", "3-3", "3-4", "4-2", "4-3", "4-4", "5-2", "5-3", "5-4", "6-2", "6-3", "6-4", "10-1", "10-2", "10-3", "10-4", "10-5", "9-1", "9-2", "9-3", "9-4", "9-5", "8-1", "8-2", "8-3", "8-4", "8-5"],
@@ -1218,70 +1391,122 @@ const VENTS_BY_LANDFILL = {
   17: ["1", "2"],
   18: ["B-2", "B-3", "B-4", "B-5", "B-6", "B-7", "B-8", "B-9", "B-11", "B-12", "B-13", "B-14", "B-15", "B-16", "B-17", "B-18", "B-19", "B-20", "B-21", "B-23", "B-25", "B-26", "B-27", "B-28"],
   19: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "1N", "2N", "3N"],
-  20: ["Z01", "Z02", "Z03", "Z04", "Z05", "Z06"],
+  20: ["Z01", "Z02", "Z03", "Z04", "Z05", "Z06"]
 };
+
+// Function to get vents dynamically (reloads from localStorage each time)
+function getVentsByLandfill() {
+  return mergeVents(BUILTIN_VENTS, loadCustomVents());
+}
+
+// Initialize VENTS_BY_LANDFILL
+let VENTS_BY_LANDFILL = getVentsByLandfill();
 const LANDFILLS = [
-  { id: 1, name: 'Odlagalište otpada Križevci', image: 'slike/odlagalista/Krizevci.jpg', lat: 46.0219, lon: 16.5425, 
+  { id: 1, name: 'Odlagalište otpada Križevci', image: 'slike/odlagalista/Krizevci.jpg', lat: 46.0219, lon: 16.5425, mapsLink: '', 
     client: 'Čistoća Križevci d.o.o., Ulica Ivana Gorana Kovačića 1, 48260 Križevci',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Križevci d.o.o., Križevci' },
-  { id: 2, name: 'Odlagalište otpada Koprivnica', image: 'slike/odlagalista/Koprivnica.jpg', lat: 46.1636, lon: 16.8297,
+  { id: 2, name: 'Odlagalište otpada Koprivnica', image: 'slike/odlagalista/Koprivnica.jpg', lat: 46.1636, lon: 16.8297, mapsLink: '',
     client: 'Komunalac Koprivnica d.o.o., Ulica Antuna Nemčića 5, 48000 Koprivnica',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Koprivnica d.o.o., Koprivnica' },
-  { id: 3, name: 'Odlagalište otpada Virovitica', image: 'slike/odlagalista/Virovitica.jpg', lat: 45.8319, lon: 17.3836,
+  { id: 3, name: 'Odlagalište otpada Virovitica', image: 'slike/odlagalista/Virovitica.jpg', lat: 45.8319, lon: 17.3836, mapsLink: '',
     client: 'Čistoća Virovitica d.o.o., Ulica Matije Gupca 78, 33000 Virovitica',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Virovitica d.o.o., Virovitica' },
-  { id: 4, name: 'Odlagalište otpada Grubišno Polje', image: 'slike/odlagalista/Grubisno-Polje.jpg', lat: 45.6989, lon: 17.1753,
+  { id: 4, name: 'Odlagalište otpada Grubišno Polje', image: 'slike/odlagalista/Grubisno-Polje.jpg', lat: 45.6989, lon: 17.1753, mapsLink: '',
     client: 'Komunalac d.o.o. Grubišno Polje, Ivana Nepomuka Jemeršića 37c, 43290 Grubišno Polje',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac d.o.o. Grubišno Polje, Prdavac - Grubišno Polje' },
-  { id: 5, name: 'Odlagalište otpada Belišće', image: 'slike/odlagalista/Belisce.jpg', lat: 45.6806, lon: 18.4042,
+  { id: 5, name: 'Odlagalište otpada Belišće', image: 'slike/odlagalista/Belisce.jpg', lat: 45.6806, lon: 18.4042, mapsLink: '',
     client: 'Belišće Komunalac d.o.o., Trg Josipa Runjanina 1, 31551 Belišće',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Belišće Komunalac d.o.o., Belišće' },
-  { id: 6, name: 'Odlagalište otpada Beli Manastir', image: 'slike/odlagalista/Beli-Manastir.jpg', lat: 45.7697, lon: 18.6042,
+  { id: 6, name: 'Odlagalište otpada Beli Manastir', image: 'slike/odlagalista/Beli-Manastir.jpg', lat: 45.7697, lon: 18.6042, mapsLink: '',
     client: 'Komunalac Beli Manastir d.o.o., Ulica Josipa Jelačića 10, 31300 Beli Manastir',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Beli Manastir d.o.o., Beli Manastir' },
-  { id: 7, name: 'Odlagalište otpada Pag', image: 'slike/odlagalista/Pag.jpg', lat: 44.4450, lon: 15.0597,
+  { id: 7, name: 'Odlagalište otpada Pag', image: 'slike/odlagalista/Pag.jpg', lat: 44.4450, lon: 15.0597, mapsLink: '',
     client: 'Vodovod Pag d.o.o., Ulica Jurja Dalmatinca 1, 23250 Pag',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Vodovod Pag d.o.o., Pag' },
-  { id: 8, name: 'Odlagalište otpada Otočac', image: 'slike/odlagalista/Otocac.jpg', lat: 44.8697, lon: 15.2378,
+  { id: 8, name: 'Odlagalište otpada Otočac', image: 'slike/odlagalista/Otocac.jpg', lat: 44.8697, lon: 15.2378, mapsLink: '',
     client: 'Komunalac Otočac d.o.o., Ulica Vladimira Nazora 4, 53220 Otočac',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Otočac d.o.o., Otočac' },
-  { id: 9, name: 'Odlagalište otpada Zadar - Diklo', image: 'slike/odlagalista/Zadar.jpg', lat: 44.1194, lon: 15.2314,
+  { id: 9, name: 'Odlagalište otpada Zadar - Diklo', image: 'slike/odlagalista/Zadar.jpg', lat: 44.1194, lon: 15.2314, mapsLink: '',
     client: 'Čistoća Zadar d.o.o., Ulica Bože Peričića 5, 23000 Zadar',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Zadar d.o.o., Zadar - Diklo' },
-  { id: 10, name: 'Odlagalište otpada Split - Karepovac', image: 'slike/odlagalista/Karepovac.jpg', lat: 43.5081, lon: 16.4402,
+  { id: 10, name: 'Odlagalište otpada Split - Karepovac', image: 'slike/odlagalista/Karepovac.jpg', lat: 43.5081, lon: 16.4402, mapsLink: '',
     client: 'Čistoća Split d.o.o., Ulica Domovinskog rata 49, 21000 Split',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Split d.o.o., Split - Karepovac' },
-  { id: 11, name: 'Odlagalište otpada Knin - Mala Promina', image: 'slike/odlagalista/Knin.jpg', lat: 44.0406, lon: 16.1966,
+  { id: 11, name: 'Odlagalište otpada Knin - Mala Promina', image: 'slike/odlagalista/Knin.jpg', lat: 44.0406, lon: 16.1966, mapsLink: '',
     client: 'Vodovod Knin d.o.o., Ulica Ante Starčevića 2, 22300 Knin',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Vodovod Knin d.o.o., Knin - Mala Promina' },
-  { id: 12, name: 'Odlagalište otpada Kljakovača - Obrovac', image: 'slike/odlagalista/Obrovac.jpg', lat: 44.2036, lon: 15.6772,
+  { id: 12, name: 'Odlagalište otpada Kljakovača - Obrovac', image: 'slike/odlagalista/Obrovac.jpg', lat: 44.2036, lon: 15.6772, mapsLink: '',
     client: 'Komunalac Obrovac d.o.o., Ulica Stjepana Radića 1, 23450 Obrovac',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Obrovac d.o.o., Kljakovača - Obrovac' },
-  { id: 13, name: 'Odlagalište otpada Cere - Labin', image: 'slike/odlagalista/Labin.jpg', lat: 45.0931, lon: 14.1197,
+  { id: 13, name: 'Odlagalište otpada Cere - Labin', image: 'slike/odlagalista/Labin.jpg', lat: 45.0931, lon: 14.1197, mapsLink: '',
     client: 'Komunalac Labin d.o.o., Ulica Rudarska 1, 52220 Labin',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Labin d.o.o., Cere - Labin' },
-  { id: 14, name: 'Odlagalište otpada Novi Dvori - Zaprešić', image: 'slike/odlagalista/Zapresic.jpg', lat: 45.8564, lon: 15.8072,
+  { id: 14, name: 'Odlagalište otpada Novi Dvori - Zaprešić', image: 'slike/odlagalista/Zapresic.jpg', lat: 45.8564, lon: 15.8072, mapsLink: '',
     client: 'Čistoća Zaprešić d.o.o., Ulica Matije Gupca 68, 10290 Zaprešić',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Čistoća Zaprešić d.o.o., Novi Dvori - Zaprešić' },
-  { id: 15, name: 'Odlagalište otpada Griža - Buzet', image: 'slike/odlagalista/Griza.jpg', lat: 45.4094, lon: 13.9667,
+  { id: 15, name: 'Odlagalište otpada Griža - Buzet', image: 'slike/odlagalista/Griza.jpg', lat: 45.4094, lon: 13.9667, mapsLink: '',
     client: 'Komunalac Buzet d.o.o., Ulica Fontana 6, 52420 Buzet',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Buzet d.o.o., Griža - Buzet' },
-  { id: 16, name: 'Odlagalište otpada Pržić - Cres', image: 'slike/odlagalista/Cres.jpg', lat: 44.9611, lon: 14.4084,
+  { id: 16, name: 'Odlagalište otpada Pržić - Cres', image: 'slike/odlagalista/Cres.jpg', lat: 44.9611, lon: 14.4084, mapsLink: '',
     client: 'Vodovod Cres d.o.o., Ulica Creskih kapetana 1, 51557 Cres',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Vodovod Cres d.o.o., Pržić - Cres' },
-  { id: 17, name: 'Odlagalište otpada Bedekovčina', image: 'slike/odlagalista/Bedekovcina.jpg', lat: 46.0403, lon: 15.9942,
+  { id: 17, name: 'Odlagalište otpada Bedekovčina', image: 'slike/odlagalista/Bedekovcina.jpg', lat: 46.0403, lon: 15.9942, mapsLink: '',
     client: 'Komunalac Bedekovčina d.o.o., Ulica Trg Eugena Kvaternika 10, 49221 Bedekovčina',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Bedekovčina d.o.o., Bedekovčina' },
-  { id: 18, name: 'Odlagalište otpada Basilica - Rovinj', image: 'slike/odlagalista/Rovinj.jpg', lat: 45.0808, lon: 13.6386,
+  { id: 18, name: 'Odlagalište otpada Basilica - Rovinj', image: 'slike/odlagalista/Rovinj.jpg', lat: 45.0808, lon: 13.6386, mapsLink: '',
     client: 'Komunalac Rovinj d.o.o., Ulica Carrera 1, 52210 Rovinj',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Rovinj d.o.o., Basilica - Rovinj' },
-  { id: 19, name: 'Odlagalište otpada Jelenčići V - Pazin', image: 'slike/odlagalista/Pazin.jpg', lat: 45.2397, lon: 13.9364,
+  { id: 19, name: 'Odlagalište otpada Jelenčići V - Pazin', image: 'slike/odlagalista/Pazin.jpg', lat: 45.2397, lon: 13.9364, mapsLink: '',
     client: 'Komunalac Pazin d.o.o., Ulica Vladimira Nazora 6, 52000 Pazin',
     reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Pazin d.o.o., Jelenčići V - Pazin' },
-  { id: 20, name: 'Odlagalište otpada Biljane Donje', image: 'slike/odlagalista/Biljane-Donje.jpg', lat: 45.4833, lon: 16.9167,
+  { id: 20, name: 'Odlagalište otpada Biljane Donje', image: 'slike/odlagalista/Biljane-Donje.jpg', lat: 45.4833, lon: 16.9167, mapsLink: '',
     client: 'Komunalac Biljane Donje d.o.o., Ulica Biljane Donje 1, 43000 Bjelovar',
-    reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Biljane Donje d.o.o., Biljane Donje' }
+    reportTitle: 'ISPITNI IZVJEŠTAJ O MJERENJU EMISIJA ODLAGALIŠNIH PLINOVA NA ODLAGALIŠTU KOMUNALNOG OTPADA – Komunalac Biljane Donje d.o.o., Biljane Donje' },
+  ...loadCustomLandfills()
 ];
+
+// Apply custom names and images to built-in landfills
+function applyCustomLandfillData() {
+  const customNames = JSON.parse(localStorage.getItem('customNames') || '{}');
+  const customImages = JSON.parse(localStorage.getItem('customImages') || '{}');
+  const customMapsLinks = JSON.parse(localStorage.getItem('customMapsLinks') || '{}');
+  const customGPS = JSON.parse(localStorage.getItem('customGPS') || '{}');
+  
+  console.log('Applying custom names, images, maps links and GPS:', { customNames, customImages, customMapsLinks, customGPS });
+  
+  LANDFILLS.forEach(landfill => {
+    if (customNames[landfill.id]) {
+      console.log(`Applying custom name to landfill ${landfill.id}: ${customNames[landfill.id]}`);
+      landfill.name = customNames[landfill.id];
+    }
+    if (customImages[landfill.id]) {
+      console.log(`Applying custom image to landfill ${landfill.id}: ${customImages[landfill.id]}`);
+      landfill.image = customImages[landfill.id];
+    }
+    if (customMapsLinks[landfill.id]) {
+      console.log(`Applying custom maps link to landfill ${landfill.id}: ${customMapsLinks[landfill.id]}`);
+      landfill.mapsLink = customMapsLinks[landfill.id];
+      
+      // Extract coordinates from maps link
+      const coords = extractCoordinatesFromMapsLink(customMapsLinks[landfill.id]);
+      if (coords.lat && coords.lon) {
+        console.log(`Extracted coordinates from maps link for landfill ${landfill.id}:`, coords);
+        landfill.lat = coords.lat;
+        landfill.lon = coords.lon;
+      }
+    }
+    // Apply custom GPS if explicitly set (overrides extracted coordinates)
+    if (customGPS[landfill.id]) {
+      console.log(`Applying custom GPS to landfill ${landfill.id}:`, customGPS[landfill.id]);
+      landfill.lat = customGPS[landfill.id].lat;
+      landfill.lon = customGPS[landfill.id].lon;
+    }
+  });
+}
+
+// Apply custom data on page load
+applyCustomLandfillData();
+
 const state = {
   selectedLandfill: null,
   currentMeasurer: "",
@@ -1359,6 +1584,9 @@ function initLandfillGrid() {
     card.innerHTML = `
     <img src="${landfill.image}" alt="${landfill.name}">
       <h3>${landfill.name}</h3>
+      <button class="navigate-btn" onclick="navigateToLandfill('${landfill.mapsLink}', '${landfill.name.replace(/'/g, "\\'")}'); event.stopPropagation();" style="margin-top:10px;padding:8px 12px;background:#4285f4;color:white;border:none;border-radius:5px;cursor:pointer;font-size:13px;width:100%;">
+        🗺️ Navigiraj
+      </button>
     `;
     card.addEventListener('click', () => {
       document.querySelectorAll('.landfill-card').forEach(c => c.classList.remove('selected'));
@@ -1368,6 +1596,18 @@ function initLandfillGrid() {
     grid.appendChild(card);
   });
 }
+
+function navigateToLandfill(mapsLink, name) {
+  // Provjeri ima li link
+  if (!mapsLink || mapsLink.trim() === '') {
+    alert('Google Maps link za ovo odlagalište nije postavljen.');
+    return;
+  }
+  
+  // Otvori link u novom tabu/prozoru
+  window.open(mapsLink, '_blank');
+}
+
 function showVentForm() {
   openVentSelectModal();
 }
@@ -2491,8 +2731,38 @@ function initApp() {
   });
   
   updateHistoryList();
+  
+  // Reload vents and coordinates from localStorage (in case admin panel added new vents/coordinates)
+  VENTS_BY_LANDFILL = getVentsByLandfill();
+  VENT_COORDINATES = getVentCoordinates();
+  applyCustomLandfillData(); // Apply custom names and images
+  
+  console.log('=== PAGE LOADED - DATA RELOADED ===');
+  console.log('Vents reloaded on page load:', VENTS_BY_LANDFILL);
+  console.log('Coordinates reloaded on page load:', VENT_COORDINATES);
+  console.log('localStorage.additionalVents:', localStorage.getItem('additionalVents'));
+  
   if (localStorage.getItem('tempMeasurement') === null || !JSON.parse(localStorage.getItem('tempMeasurement')).landfill) {
       showScreen('password-screen');
+  }
+}
+
+// Function to manually reload vents (for debugging)
+window.reloadVentsData = function() {
+  console.log('=== MANUAL RELOAD TRIGGERED ===');
+  VENTS_BY_LANDFILL = getVentsByLandfill();
+  VENT_COORDINATES = getVentCoordinates();
+  applyCustomLandfillData(); // Apply custom names and images
+  
+  console.log('Vents reloaded:', VENTS_BY_LANDFILL);
+  console.log('Coordinates reloaded:', VENT_COORDINATES);
+  console.log('Landfills:', LANDFILLS);
+  alert('Podaci ponovno učitani! Pogledaj konzolu za detalje.');
+  
+  // Refresh vent dropdown if on measurement screen
+  if (state.selectedLandfill) {
+    renderVentDropdown();
+    updateMapMarkers();
   }
 }
 
@@ -2613,7 +2883,7 @@ function initAutoSave() {
 
 // === INTERACTIVE MAP WITH MARKERS ===
 // Koordinate odušnika za svako odlagalište (% od širine i visine slike)
-const VENT_COORDINATES = {
+const BUILTIN_VENT_COORDINATES = {
   1: {
     "1": {x: 20.1, y: 81.1},
     "2": {x: 27.1, y: 81},
@@ -2982,8 +3252,16 @@ const VENT_COORDINATES = {
     "Z04": {x: 67.8, y: 72},
     "Z05": {x: 60.2, y: 63.4},
     "Z06": {x: 66.9, y: 56}
-  }, // Biljane Donje ✅
+  } // Biljane Donje ✅
 };
+
+// Function to get coordinates dynamically (reloads from localStorage each time)
+function getVentCoordinates() {
+  return {...BUILTIN_VENT_COORDINATES, ...loadCustomCoordinates()};
+}
+
+// Initialize VENT_COORDINATES
+let VENT_COORDINATES = getVentCoordinates();
 
 function initInteractiveMap() {
   console.log('initInteractiveMap called');
