@@ -44,7 +44,20 @@ body {
 }
 .logout-btn:hover { background: white; color: #2e7d32; }
 .content { padding: 40px; }
-.login-screen { max-width: 400px; margin: 50px auto; text-align: center; }
+.login-screen { 
+  max-width: 400px; 
+  margin: 50px auto; 
+  text-align: center;
+  background: white;
+  padding: 40px;
+  border-radius: 15px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+.login-screen h2 {
+  color: #2e7d32;
+  margin-bottom: 30px;
+  font-size: 28px;
+}
 .login-screen input, .login-screen button {
   width: 100%;
   padding: 15px;
@@ -53,11 +66,23 @@ body {
   border-radius: 8px;
   font-size: 16px;
 }
+.login-screen input:focus {
+  outline: none;
+  border-color: #2e7d32;
+}
 .login-screen button {
   background: #2e7d32;
   color: white;
   border: none;
   font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.login-screen button:hover {
+  background: #1b5e20;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3);
+}
   cursor: pointer;
 }
 .admin-panel { display: none; }
@@ -291,6 +316,126 @@ body {
   color: #2e7d32;
   margin-bottom: 20px;
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+  
+  .login-screen {
+    margin: 20px auto;
+    padding: 30px 20px;
+    max-width: 90%;
+  }
+  
+  .login-screen h2 {
+    font-size: 24px;
+  }
+  
+  .header {
+    padding: 20px 15px;
+  }
+  
+  .header h1 {
+    font-size: 24px;
+  }
+  
+  .header p {
+    font-size: 14px;
+  }
+  
+  .logout-btn {
+    position: static;
+    margin-top: 15px;
+    width: 100%;
+  }
+  
+  .content {
+    padding: 20px 15px;
+  }
+  
+  .tabs {
+    flex-direction: column;
+  }
+  
+  .tab {
+    width: 100%;
+    margin: 5px 0;
+  }
+  
+  .form-section {
+    padding: 15px;
+  }
+  
+  .form-section h3 {
+    font-size: 18px;
+  }
+  
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  .btn {
+    width: 100%;
+    margin: 5px 0;
+  }
+  
+  .landfill-select-list {
+    grid-template-columns: 1fr;
+  }
+  
+  .coordinate-picker {
+    max-width: 100%;
+  }
+  
+  .coordinate-picker img {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  .vents-list {
+    grid-template-columns: 1fr;
+  }
+  
+  /* Make Google Maps link input responsive */
+  .form-group > div[style*="display:flex"] {
+    flex-direction: column !important;
+  }
+  
+  .form-group > div[style*="display:flex"] > div {
+    width: 100% !important;
+  }
+  
+  .form-group > div[style*="display:flex"] > button {
+    width: 100% !important;
+    margin-top: 10px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-screen {
+    padding: 20px 15px;
+  }
+  
+  .login-screen h2 {
+    font-size: 20px;
+  }
+  
+  .header h1 {
+    font-size: 20px;
+  }
+  
+  .form-section {
+    padding: 10px;
+  }
+  
+  .coordinate-picker {
+    padding: 10px;
+  }
+}
 </style>
 </head>
 <body>
@@ -303,15 +448,15 @@ body {
   </div>
 
   <!-- Login -->
-  <div class="content login-screen" id="login-screen" style="display:none;">
+  <div class="content login-screen" id="login-screen">
     <h2>Prijava</h2>
-    <input type="password" id="password" placeholder="Lozinka" autofocus onkeypress="if(event.key==='Enter') login()">
+    <input type="password" id="password" placeholder="Unesite lozinku" autofocus onkeypress="if(event.key==='Enter') login()">
     <button onclick="login()">Prijavi se</button>
-    <p style="margin-top:20px;color:#666;">Lozinka: admin3737</p>
+  </div>
   </div>
 
   <!-- Admin Panel -->
-  <div class="content admin-panel" id="admin-panel" style="display:block;">
+  <div class="content admin-panel" id="admin-panel" style="display:none;">
     <div style="background:#e3f2fd;border-left:4px solid #2196f3;padding:15px;margin-bottom:20px;border-radius:8px;">
       <strong>ℹ️ Automatska sinkronizacija:</strong> Sve promjene (nova odlagališta, odušnici, koordinate) automatski se spremaju u localStorage i odmah su dostupne u index.html aplikaciji. Nema potrebe za ručnim exportom!
     </div>
@@ -456,13 +601,21 @@ let newLandfillVents = [];
 let newLandfillCoords = {};
 let currentEditLandfillId = null;
 
-// Login - no password required
+// Login with password
 function login() {
-  sessionStorage.setItem('adminLoggedIn', 'true');
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('admin-panel').style.display = 'block';
-  document.getElementById('logout-btn').style.display = 'block';
-  loadData();
+  const password = document.getElementById('password').value;
+  
+  if (password === '3737') {
+    sessionStorage.setItem('adminLoggedIn', 'true');
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    document.getElementById('logout-btn').style.display = 'block';
+    loadData();
+  } else {
+    alert('Pogrešna lozinka!');
+    document.getElementById('password').value = '';
+    document.getElementById('password').focus();
+  }
 }
 
 function logout() {
@@ -470,9 +623,17 @@ function logout() {
   location.reload();
 }
 
-// Auto-login on page load
+// Check login on page load
 document.addEventListener('DOMContentLoaded', function() {
-  login();
+  if (sessionStorage.getItem('adminLoggedIn') === 'true') {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    document.getElementById('logout-btn').style.display = 'block';
+    loadData();
+  } else {
+    document.getElementById('login-screen').style.display = 'block';
+    document.getElementById('admin-panel').style.display = 'none';
+  }
   
   // Handle new landfill image file selection
   document.getElementById('new-landfill-image-file').addEventListener('change', function(e) {
