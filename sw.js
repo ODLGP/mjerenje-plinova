@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mop-mjerenje-v42';
+const CACHE_NAME = 'mop-mjerenje-v43';
 const urlsToCache = [
   './index.html',
   './manifest.json',
@@ -31,60 +31,59 @@ const urlsToCache = [
   'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js'
 ];
 
-// Instalacija Service Workera
 self.addEventListener('install', event => {
+  // Odmah preuzmi kontrolu bez čekanja
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Cache otvoren');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
   );
 });
 
-// Aktivacija Service Workera
 self.addEventListener('activate', event => {
+  // Odmah preuzmi kontrolu nad svim tabovima
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Brišem stari cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then(cacheNames =>
+        Promise.all(
+          cacheNames
+            .filter(name => name !== CACHE_NAME)
+            .map(name => caches.delete(name))
+        )
+      )
+    ])
   );
 });
 
-// Dohvaćanje resursa
 self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+
+  // Za HTML fajlove - uvijek dohvati s mreže, cache kao fallback
+  if (event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Za ostale resurse - cache first, mreža kao fallback
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Vraća cache ako postoji, inače dohvaća s mreže
-        if (response) {
+    caches.match(event.request).then(cached => {
+      if (cached) return cached;
+      return fetch(event.request).then(response => {
+        if (!response || response.status !== 200 || response.type !== 'basic') {
           return response;
         }
-        return fetch(event.request).then(
-          response => {
-            // Provjeri je li odgovor valjan
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-            
-            // Kloniraj odgovor
-            const responseToCache = response.clone();
-            
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
-            
-            return response;
-          }
-        );
-      })
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      });
+    })
   );
 });
