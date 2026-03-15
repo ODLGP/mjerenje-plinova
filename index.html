@@ -2358,13 +2358,15 @@ async function loadNotifications() {
     const notifs = [];
 
     entries.forEach((e, i) => {
-      notifs.push({ ...e, id: e.id || ('log_' + e.timestamp + '_' + i), source: 'admin' });
+      notifs.push({ ...e, id: e.id || ('log_' + (e.timestamp || '').replace(/\s/g,'') + '_' + (e.text || '').replace(/\s/g,'').slice(0,10)), source: 'admin' });
     });
 
     measurements.slice(-10).reverse().forEach((m, i) => {
       const ts = m.date + (m.startTime ? ' ' + m.startTime : '');
+      // Stable ID based on content, not index
+      const stableId = 'meas_' + (m.date || '') + '_' + (m.startTime || '') + '_' + (m.measurer || '').replace(/\s/g,'') + '_' + (m.landfill?.name || '').replace(/\s/g,'').slice(0,10);
       notifs.push({
-        id: 'meas_' + m.date + '_' + (m.startTime || '') + '_' + (m.measurer || '') + '_' + i,
+        id: stableId,
         source: 'measurement',
         text: `Novo mjerenje na lokaciji <strong>${m.landfill?.name || '?'}</strong> — ${m.vents?.length || 0} odušnika`,
         detail: `Mjeritelj: ${m.measurer} | ${m.date} ${m.startTime || ''}`,
