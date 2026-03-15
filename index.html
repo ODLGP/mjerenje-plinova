@@ -1269,6 +1269,7 @@ window._fbCache = {
   customGPS: null,
   measurements: null,
   activityLog: null,
+  landfillImages: null,
   loaded: false
 };
 
@@ -1277,16 +1278,25 @@ async function loadAllFromFirebase() {
   try {
     const { doc, getDoc } = window.firebaseFunctions;
     const db = window.firebaseDB;
-    const keys = ['landfills','additionalVents','hiddenVents','coordinates','customNames','customImages','customMapsLinks','customGPS','measurements'];
+    const keys = ['landfills','additionalVents','hiddenVents','coordinates','customNames','customImages','customMapsLinks','customGPS','measurements','landfillImages'];
     const results = await Promise.all(keys.map(k => getDoc(doc(db, 'mop_data', k))));
     keys.forEach((k, i) => {
       if (results[i].exists()) {
         const data = results[i].data();
         window._fbCache[k] = data;
-        // Also update localStorage as backup
-        localStorage.setItem(k === 'landfills' ? 'landfills' : k, JSON.stringify(data.list !== undefined ? data.list : data));
+        localStorage.setItem(k, JSON.stringify(data.list !== undefined ? data.list : data));
       }
     });
+    // Restore base64 images into landfills cache
+    if (window._fbCache.landfills && window._fbCache.landfillImages) {
+      const imgs = window._fbCache.landfillImages;
+      const list = (window._fbCache.landfills.list || window._fbCache.landfills || []).map(l => {
+        if (l.image === '__base64__' && imgs[l.id]) return { ...l, image: imgs[l.id] };
+        return l;
+      });
+      window._fbCache.landfills = { list };
+      localStorage.setItem('landfills', JSON.stringify(list));
+    }
     window._fbCache.loaded = true;
     console.log('Firebase data loaded:', window._fbCache);
     return true;
