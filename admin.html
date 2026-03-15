@@ -335,6 +335,23 @@ body {
   font-size: 14px;
   margin: 5px 0;
 }
+#contract-status-badge {
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #f5f5f5;
+  font-size: 14px;
+  display: inline-block;
+}
+.contract-freq-badge {
+  display: inline-block;
+  background: #e3f2fd;
+  color: #1565c0;
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 3px;
+}
 .edit-section {
   background: #fff;
   padding: 25px;
@@ -612,6 +629,55 @@ body {
         </div>
 
         <div class="edit-section" style="margin-top:20px;">
+          <h3>📄 Ugovor i učestalost mjerenja</h3>
+          <div id="contract-status-badge" style="margin-bottom:15px;"></div>
+
+          <!-- Ručno označavanje nevažećeg ugovora -->
+          <div style="margin-bottom:18px;padding:12px 16px;background:#fff3f3;border-radius:8px;border:1px solid #ffcdd2;display:flex;align-items:center;gap:12px;">
+            <input type="checkbox" id="contract-expired-manual" style="width:20px;height:20px;cursor:pointer;margin:0;flex-shrink:0;">
+            <label for="contract-expired-manual" style="cursor:pointer;margin:0;font-weight:600;color:#c62828;font-size:15px;">
+              ❌ Ugovor više ne vrijedi (nema aktivnog ugovora)
+            </label>
+          </div>
+
+          <div id="contract-fields-wrapper">
+            <div class="form-group">
+              <label>Datum potpisa ugovora:</label>
+              <input type="date" id="contract-start">
+            </div>
+            <div class="form-group">
+              <label>Ugovor vrijedi do:</label>
+              <input type="date" id="contract-end">
+            </div>
+            <div class="form-group">
+              <label>Učestalost mjerenja:</label>
+              <select id="contract-frequency">
+                <option value="">-- Odaberi --</option>
+                <option value="1">Svaki mjesec</option>
+                <option value="2">Svaka 2 mjeseca</option>
+                <option value="3">Svaka 3 mjeseca</option>
+                <option value="6">Svakih 6 mjeseci</option>
+                <option value="12">Jednom godišnje</option>
+              </select>
+              <textarea id="contract-frequency-note" rows="2" placeholder="Napomena (npr. svaki mjesec rotacija 12 odušnika, ili svaki drugi mj. odušnici 1-7...)" style="margin-top:8px;font-size:13px;resize:vertical;"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Priloži ugovor / narudžbenicu (PDF, Word, slika):</label>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <input type="file" id="contract-file-input" accept=".pdf,.doc,.docx,image/*" style="flex:1;">
+                <span id="contract-file-name" style="font-size:13px;color:#666;"></span>
+              </div>
+              <div id="contract-file-actions" style="margin-top:8px;display:none;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="openContractFile()" type="button" style="padding:6px 14px;font-size:13px;">📂 Otvori prilog</button>
+                <button class="btn btn-danger" onclick="removeContractFile()" type="button" style="padding:6px 14px;font-size:13px;">🗑️ Ukloni prilog</button>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-success" onclick="saveContractData()">💾 Spremi ugovor</button>
+        </div>
+
+        <div class="edit-section" style="margin-top:20px;">
           <h3>Postavi koordinate odušnika</h3>
           <p style="color:#666;margin-bottom:15px;">Klikni na sliku da označiš poziciju odušnika</p>
           <button class="btn btn-warning" onclick="resetCoordinates()" style="margin-bottom:15px;">🔄 Resetiraj sve koordinate</button>
@@ -853,6 +919,7 @@ async function loadData() {
     _applyLoadedData(customLandfills, customCoordinates, additionalVents, customNames, customImages, customMapsLinks, customGPS, hiddenVents);
     showMessage('Podaci ucitani!', 'success');
     setTimeout(() => { const m = document.getElementById('message'); if(m) m.textContent = ''; }, 2000);
+    await loadContractDataFromFirebase();
   } catch(e) {
     console.error('Firebase load error:', e);
     showMessage('Greska - koristim lokalne podatke', 'error');
@@ -985,6 +1052,164 @@ function showMessage(msg, type) {
   div.textContent = msg;
   div.style.display = 'block';
   setTimeout(() => div.style.display = 'none', 3000);
+}
+
+// ===== CONTRACT DATA =====
+let contractData = {}; // { [landfillId]: { contractStart, contractEnd, measureFrequency, contractFile, contractFileName } }
+
+function getContractBadge(landfillId) {
+  const c = contractData[landfillId];
+  if (!c || !c.contractEnd) {
+    if (c && c.expiredManual) return '❌ <span style="color:#e74c3c;font-weight:600;">Ugovor nevažeći</span>';
+    return '📋 <span style="color:#e67e22;font-weight:600;">Fali ugovor</span>';
+  }
+  if (c.expiredManual) return '❌ <span style="color:#e74c3c;font-weight:600;">Ugovor nevažeći</span>';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const end = new Date(c.contractEnd);
+  if (end < today) return '❌ <span style="color:#e74c3c;font-weight:600;">Ugovor nevažeći</span>';
+  return '✅ <span style="color:#27ae60;font-weight:600;">Ugovor aktivan</span>';
+}
+
+function loadContractFields() {
+  const id = currentEditLandfillId;
+  const c = contractData[id] || {};
+  document.getElementById('contract-start').value = c.contractStart || '';
+  document.getElementById('contract-end').value = c.contractEnd || '';
+  document.getElementById('contract-frequency').value = c.measureFrequency || '';
+  document.getElementById('contract-frequency-note').value = c.measureFrequencyNote || '';
+  const expired = !!c.expiredManual;
+  document.getElementById('contract-expired-manual').checked = expired;
+  document.getElementById('contract-fields-wrapper').style.opacity = expired ? '0.4' : '1';
+  document.getElementById('contract-fields-wrapper').style.pointerEvents = expired ? 'none' : '';
+  const nameEl = document.getElementById('contract-file-name');
+  const actionsEl = document.getElementById('contract-file-actions');
+  if (c.contractFileName) {
+    nameEl.textContent = '📎 ' + c.contractFileName;
+    actionsEl.style.display = 'flex';
+  } else {
+    nameEl.textContent = '';
+    actionsEl.style.display = 'none';
+  }
+  document.getElementById('contract-status-badge').innerHTML = getContractBadge(id);
+
+  // Toggle fields on checkbox change
+  document.getElementById('contract-expired-manual').onchange = function() {
+    const checked = this.checked;
+    document.getElementById('contract-fields-wrapper').style.opacity = checked ? '0.4' : '1';
+    document.getElementById('contract-fields-wrapper').style.pointerEvents = checked ? 'none' : '';
+    document.getElementById('contract-status-badge').innerHTML = checked
+      ? '❌ <span style="color:#e74c3c;font-weight:600;">Ugovor nevažeći</span>'
+      : getContractBadge(id);
+  };
+}
+
+async function saveContractData() {
+  const id = currentEditLandfillId;
+  if (!id) return;
+  const start = document.getElementById('contract-start').value;
+  const end = document.getElementById('contract-end').value;
+  const freq = document.getElementById('contract-frequency').value;
+  const freqNote = document.getElementById('contract-frequency-note').value.trim();
+  const expiredManual = document.getElementById('contract-expired-manual').checked;
+  const fileInput = document.getElementById('contract-file-input');
+
+  const existing = contractData[id] || {};
+
+  const entry = {
+    contractStart: start,
+    contractEnd: end,
+    measureFrequency: freq,
+    measureFrequencyNote: freqNote,
+    expiredManual: expiredManual,
+    contractFile: existing.contractFile || null,
+    contractFileName: existing.contractFileName || null
+  };
+
+  // Handle new file upload
+  if (fileInput.files && fileInput.files[0]) {
+    const file = fileInput.files[0];
+    entry.contractFileName = file.name;
+    entry.contractFile = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+    fileInput.value = '';
+  }
+
+  contractData[id] = entry;
+
+  // Save to Firebase
+  try {
+    const { doc, setDoc } = window.firebaseFunctions;
+    const db = window.firebaseDB;
+    // Store with string keys
+    const toSave = {};
+    Object.keys(contractData).forEach(k => {
+      const v = contractData[k];
+      toSave[k] = { contractStart: v.contractStart||'', contractEnd: v.contractEnd||'', measureFrequency: v.measureFrequency||'', measureFrequencyNote: v.measureFrequencyNote||'', contractFileName: v.contractFileName||'', expiredManual: !!v.expiredManual };
+    });
+    // Save file separately to avoid 1MB limit
+    const filesDoc = {};
+    Object.keys(contractData).forEach(k => { if (contractData[k].contractFile) filesDoc[k] = contractData[k].contractFile; });
+    await Promise.all([
+      setDoc(doc(db, 'mop_data', 'contractData'), toSave),
+      setDoc(doc(db, 'mop_data', 'contractFiles'), filesDoc)
+    ]);
+    localStorage.setItem('contractData', JSON.stringify(toSave));
+  } catch(e) {
+    console.error('Contract save error:', e);
+    showMessage('Firebase nedostupan - spremljeno lokalno', 'error');
+  }
+
+  loadContractFields();
+  renderLandfillSelectList();
+  const landfill = landfillsData.find(l => l.id === id);
+  showMessage('Ugovor spremljen!', 'success');
+  logActivity(`📄 Ažuriran ugovor za: <strong>${landfill ? landfill.name : id}</strong>`, end ? `Vrijedi do: ${end}` : '');
+}
+
+function openContractFile() {
+  const id = currentEditLandfillId;
+  const c = contractData[id];
+  if (!c || !c.contractFile) return;
+  const a = document.createElement('a');
+  a.href = c.contractFile;
+  a.download = c.contractFileName || 'ugovor';
+  a.click();
+}
+
+function removeContractFile() {
+  const id = currentEditLandfillId;
+  if (!contractData[id]) return;
+  contractData[id].contractFile = null;
+  contractData[id].contractFileName = null;
+  document.getElementById('contract-file-name').textContent = '';
+  document.getElementById('contract-file-actions').style.display = 'none';
+  showMessage('Prilog uklonjen. Spremi za potvrdu.', 'info');
+}
+
+async function loadContractDataFromFirebase() {
+  if (!window.firebaseDB) return;
+  try {
+    const { doc, getDoc } = window.firebaseFunctions;
+    const db = window.firebaseDB;
+    const [snap, filesSnap] = await Promise.all([
+      getDoc(doc(db, 'mop_data', 'contractData')),
+      getDoc(doc(db, 'mop_data', 'contractFiles'))
+    ]);
+    const meta = snap.exists() ? snap.data() : {};
+    const files = filesSnap.exists() ? filesSnap.data() : {};
+    contractData = {};
+    Object.keys(meta).forEach(k => {
+      contractData[k] = { ...meta[k], contractFile: files[k] || null };
+    });    localStorage.setItem('contractData', JSON.stringify(meta));
+  } catch(e) {
+    console.warn('Contract load error:', e);
+    const local = JSON.parse(localStorage.getItem('contractData') || '{}');
+    contractData = {};
+    Object.keys(local).forEach(k => { contractData[k] = { ...local[k], contractFile: null }; });
+  }
 }
 
 // Log activity to Firebase
@@ -1382,11 +1607,19 @@ function renderLandfillSelectList() {
     }
     
     const hasCoords = coordinatesData[landfill.id] && Object.keys(coordinatesData[landfill.id]).length > 0;
+    const contractBadge = getContractBadge(landfill.id);
+    const c = contractData[landfill.id];
+    const freqLabels = {'1':'Svaki mj.','2':'Svaka 2 mj.','3':'Svaka 3 mj.','6':'Svakih 6 mj.','12':'Godišnje'};
+    const freqBadge = c && c.measureFrequency ? `<span class="contract-freq-badge">🔁 ${freqLabels[c.measureFrequency]||''}</span>` : '';
+    const freqNote = c && c.measureFrequencyNote ? `<p style="font-size:12px;color:#555;margin-top:5px;font-style:italic;">📝 ${c.measureFrequencyNote}</p>` : '';
     
     card.innerHTML = `
       <h4>${landfill.name}</h4>
       <p>📍 Odušnika: ${landfill.vents.length}</p>
       <p>🗺️ Koordinate: ${hasCoords ? '✓' : '✗'}</p>
+      <p>${contractBadge}</p>
+      ${freqBadge}
+      ${freqNote}
     `;
     
     card.onclick = () => selectLandfillForEdit(landfill.id);
@@ -1418,6 +1651,7 @@ function selectLandfillForEdit(id) {
   renderEditVentsList();
   renderEditCoordinateMarkers();
   initEditCoordinatePicker();
+  loadContractFields();
 }
 
 // Update landfill basic info
