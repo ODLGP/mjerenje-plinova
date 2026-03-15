@@ -15,7 +15,7 @@
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAjAHmqlfgPJxdlrGmyM-r7CgF7lIuLGCw",
@@ -30,7 +30,7 @@
   const db = getFirestore(app);
 
   window.firebaseDB = db;
-  window.firebaseFunctions = { doc, getDoc };
+  window.firebaseFunctions = { doc, getDoc, setDoc };
   window.firebaseReady = true;
   document.dispatchEvent(new Event('firebaseReady'));
 </script>
