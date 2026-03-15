@@ -387,6 +387,20 @@ textarea {
   font-size: 14px;
   color: var(--secondary-text);
 }
+.notif-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.notif-item.notif-admin { background: #e8f5e9; border-left: 3px solid #4caf50; }
+.notif-item.notif-measurement { background: #e3f2fd; border-left: 3px solid #2196f3; }
+.notif-item .notif-time { color: #999; font-size: 11px; margin-top: 2px; white-space: nowrap; }
+.notif-item .notif-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
 #history-list .history-item .button-group {
   margin-top: 15px;
 }
@@ -893,6 +907,18 @@ textarea {
         Povijest mjerenja
       </button>
     </div>
+
+    <!-- Obavijesti -->
+    <div id="notifications-section" style="margin-top:25px;text-align:left;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <span style="font-size:18px;">🔔</span>
+        <strong style="color:#333;font-size:16px;">Obavijesti</strong>
+        <span id="notif-badge" style="display:none;background:#e74c3c;color:white;border-radius:50%;width:20px;height:20px;font-size:11px;font-weight:bold;display:flex;align-items:center;justify-content:center;"></span>
+      </div>
+      <div id="notifications-list" style="max-height:280px;overflow-y:auto;">
+        <p style="color:#aaa;font-size:13px;text-align:center;">Učitavam obavijesti...</p>
+      </div>
+    </div>
   </div>
 </div>
 <div class="screen" id="template-landfill-screen">
@@ -1242,6 +1268,7 @@ window._fbCache = {
   customMapsLinks: null,
   customGPS: null,
   measurements: null,
+  activityLog: null,
   loaded: false
 };
 
@@ -2291,6 +2318,96 @@ async function loadMeasurementsFromFirebase() {
   }
   return null;
 }
+
+// === NOTIFICATIONS ===
+function getDismissedNotifs() {
+  return JSON.parse(localStorage.getItem('dismissedNotifs') || '[]');
+}
+function dismissAllNotifs(ids) {
+  const dismissed = getDismissedNotifs();
+  ids.forEach(id => { if (!dismissed.includes(id)) dismissed.push(id); });
+  localStorage.setItem('dismissedNotifs', JSON.stringify(dismissed));
+}
+
+async function loadNotifications() {
+  const list = document.getElementById('notifications-list');
+  if (!list) return;
+  try {
+    if (!window.firebaseDB) throw new Error('no firebase');
+    const { doc, getDoc } = window.firebaseFunctions;
+
+    const [logSnap, mSnap] = await Promise.all([
+      getDoc(doc(window.firebaseDB, 'mop_data', 'activityLog')),
+      getDoc(doc(window.firebaseDB, 'mop_data', 'measurements'))
+    ]);
+
+    const entries = logSnap.exists() ? (logSnap.data().list || []) : [];
+    const measurements = mSnap.exists() ? (mSnap.data().list || []) : [];
+
+    // Build combined notification list with stable IDs
+    const notifs = [];
+
+    entries.forEach((e, i) => {
+      notifs.push({ ...e, id: e.id || ('log_' + e.timestamp + '_' + i), source: 'admin' });
+    });
+
+    measurements.slice(-10).reverse().forEach((m, i) => {
+      const ts = m.date + (m.startTime ? ' ' + m.startTime : '');
+      notifs.push({
+        id: 'meas_' + m.date + '_' + (m.startTime || '') + '_' + (m.measurer || '') + '_' + i,
+        source: 'measurement',
+        text: `Novo mjerenje na lokaciji <strong>${m.landfill?.name || '?'}</strong> — ${m.vents?.length || 0} odušnika`,
+        detail: `Mjeritelj: ${m.measurer} | ${m.date} ${m.startTime || ''}`,
+        timestamp: ts
+      });
+    });
+
+    notifs.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    const allRecent = notifs.slice(0, 20);
+
+    // Filter out dismissed ones for this device
+    const dismissed = getDismissedNotifs();
+    const visible = allRecent.filter(n => !dismissed.includes(n.id));
+
+    const badge = document.getElementById('notif-badge');
+
+    if (visible.length === 0) {
+      if (badge) badge.style.display = 'none';
+      list.innerHTML = '<p style="color:#aaa;font-size:13px;text-align:center;padding:10px;">Nema novih obavijesti.</p>';
+      return;
+    }
+
+    if (badge) { badge.textContent = visible.length; badge.style.display = 'flex'; }
+
+    // Render with dismiss button per item + dismiss all button
+    const allIds = visible.map(n => n.id);
+    list.innerHTML = `
+      <div style="text-align:right;margin-bottom:8px;">
+        <button onclick="dismissAllNotifs(${JSON.stringify(allIds).replace(/"/g,"'")});loadNotifications();" 
+          style="background:none;border:1px solid #ccc;border-radius:6px;padding:4px 10px;font-size:12px;color:#888;cursor:pointer;">
+          🗑️ Obriši sve obavijesti
+        </button>
+      </div>
+      ${visible.map(n => {
+        const icon = n.source === 'measurement' ? '📏' : '⚙️';
+        const cls = n.source === 'measurement' ? 'notif-measurement' : 'notif-admin';
+        const safeId = n.id.replace(/'/g, "\\'");
+        return `<div class="notif-item ${cls}" id="notif-${n.id.replace(/[^a-z0-9]/gi,'_')}">
+          <span class="notif-icon">${icon}</span>
+          <div style="flex:1;">
+            <div>${n.text}</div>
+            ${n.detail ? `<div style="color:#666;font-size:12px;margin-top:2px;">${n.detail}</div>` : ''}
+            <div class="notif-time">${n.timestamp || ''}</div>
+          </div>
+          <button onclick="dismissAllNotifs(['${safeId}']);loadNotifications();"
+            style="background:none;border:none;color:#bbb;font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0;" title="Obriši">✕</button>
+        </div>`;
+      }).join('')}
+    `;
+  } catch(e) {
+    list.innerHTML = '<p style="color:#aaa;font-size:13px;text-align:center;padding:10px;">Obavijesti nisu dostupne.</p>';
+  }
+}
 function updateHistoryList(filtered = null) {
   const measurements = filtered || loadMeasurements();
   const historyList = document.getElementById('history-list');
@@ -2642,8 +2759,9 @@ function initApp() {
       return;
     }
     showScreen('login-screen');
+    loadNotifications();
   });
-  
+
   document.getElementById('login-form').addEventListener('submit', e => {
     e.preventDefault();
     state.currentMeasurer = document.getElementById('measurer-select').value;
