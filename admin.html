@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="hr">
 <head>
 <meta charset="utf-8">
@@ -11,6 +11,29 @@
 <link rel="manifest" href="admin-manifest.json">
 <link rel="apple-touch-icon" href="admin-icon.png">
 <title>MOP Admin Panel</title>
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAjAHmqlfgPJxdlrGmyM-r7CgF7lIuLGCw",
+    authDomain: "mop-admin.firebaseapp.com",
+    projectId: "mop-admin",
+    storageBucket: "mop-admin.firebasestorage.app",
+    messagingSenderId: "583593879937",
+    appId: "1:583593879937:web:97447a5b9aac2659482080"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // Expose Firebase functions globally
+  window.firebaseDB = db;
+  window.firebaseFunctions = { doc, setDoc, getDoc, collection, getDocs, deleteDoc };
+  window.firebaseReady = true;
+  document.dispatchEvent(new Event('firebaseReady'));
+</script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -787,185 +810,127 @@ const BUILTIN_COORDINATES = {
 
 let selectedVentForCoordinates = null;
 
-// Load data
-function loadData() {
+// Load data from Firebase
+async function loadData() {
+  const { doc, getDoc } = window.firebaseFunctions;
+  const db = window.firebaseDB;
+  try {
+    showMessage('Ucitavam podatke...', 'info');
+    const [lSnap, cSnap, aSnap, nSnap, iSnap, mSnap, gSnap, hSnap] = await Promise.all([
+      getDoc(doc(db, 'mop_data', 'landfills')),
+      getDoc(doc(db, 'mop_data', 'coordinates')),
+      getDoc(doc(db, 'mop_data', 'additionalVents')),
+      getDoc(doc(db, 'mop_data', 'customNames')),
+      getDoc(doc(db, 'mop_data', 'customImages')),
+      getDoc(doc(db, 'mop_data', 'customMapsLinks')),
+      getDoc(doc(db, 'mop_data', 'customGPS')),
+      getDoc(doc(db, 'mop_data', 'hiddenVents'))
+    ]);
+    const customLandfills = lSnap.exists() ? lSnap.data().list || [] : [];
+    const customCoordinates = cSnap.exists() ? cSnap.data() : {};
+    const additionalVents = aSnap.exists() ? aSnap.data() : {};
+    const customNames = nSnap.exists() ? nSnap.data() : {};
+    const customImages = iSnap.exists() ? iSnap.data() : {};
+    const customMapsLinks = mSnap.exists() ? mSnap.data() : {};
+    const customGPS = gSnap.exists() ? gSnap.data() : {};
+    const hiddenVents = hSnap.exists() ? hSnap.data() : {};
+    _applyLoadedData(customLandfills, customCoordinates, additionalVents, customNames, customImages, customMapsLinks, customGPS, hiddenVents);
+    showMessage('Podaci ucitani!', 'success');
+    setTimeout(() => { const m = document.getElementById('message'); if(m) m.textContent = ''; }, 2000);
+  } catch(e) {
+    console.error('Firebase load error:', e);
+    showMessage('Greska - koristim lokalne podatke', 'error');
+    _loadFromLocalStorage();
+  }
+  renderLandfillSelectList();
+}
+
+function _applyLoadedData(customLandfills, customCoordinates, additionalVents, customNames, customImages, customMapsLinks, customGPS, hiddenVents) {
+  landfillsData = [
+    ...BUILTIN_LANDFILLS.map(l => ({ ...l, vents: [...l.vents] })),
+    ...customLandfills
+  ];
+  landfillsData.forEach(landfill => {
+    if (customNames[landfill.id]) landfill.name = customNames[landfill.id];
+    if (customImages[landfill.id]) landfill.image = customImages[landfill.id];
+    if (customGPS[landfill.id]) { landfill.lat = customGPS[landfill.id].lat; landfill.lon = customGPS[landfill.id].lon; }
+    if (customMapsLinks[landfill.id]) landfill.mapsLink = customMapsLinks[landfill.id];
+    if (hiddenVents[landfill.id]) landfill.vents = landfill.vents.filter(v => !hiddenVents[landfill.id].includes(v));
+    if (additionalVents[landfill.id]) landfill.vents = [...landfill.vents, ...additionalVents[landfill.id]];
+  });
+  coordinatesData = {...BUILTIN_COORDINATES};
+  Object.keys(customCoordinates).forEach(id => {
+    if (id === 'list') return;
+    if (!coordinatesData[id]) coordinatesData[id] = {};
+    coordinatesData[id] = { ...coordinatesData[id], ...customCoordinates[id] };
+  });
+}
+
+function _loadFromLocalStorage() {
   const customLandfills = JSON.parse(localStorage.getItem('landfills') || '[]');
   const customCoordinates = JSON.parse(localStorage.getItem('coordinates') || '{}');
   const additionalVents = JSON.parse(localStorage.getItem('additionalVents') || '{}');
   const customNames = JSON.parse(localStorage.getItem('customNames') || '{}');
   const customImages = JSON.parse(localStorage.getItem('customImages') || '{}');
+  const customMapsLinks = JSON.parse(localStorage.getItem('customMapsLinks') || '{}');
   const customGPS = JSON.parse(localStorage.getItem('customGPS') || '{}');
   const hiddenVents = JSON.parse(localStorage.getItem('hiddenVents') || '{}');
-  
-  console.log('Admin: Loading data from localStorage');
-  console.log('Custom landfills:', customLandfills);
-  console.log('Additional vents:', additionalVents);
-  console.log('Custom coordinates:', customCoordinates);
-  console.log('Custom names:', customNames);
-  console.log('Custom images:', customImages);
-  console.log('Custom GPS:', customGPS);
-  console.log('Hidden vents:', hiddenVents);
-  
-  // Merge built-in and custom landfills (DEEP COPY to avoid modifying BUILTIN_LANDFILLS)
-  landfillsData = [
-    ...BUILTIN_LANDFILLS.map(l => ({
-      ...l,
-      vents: [...l.vents] // Deep copy of vents array
-    })), 
-    ...customLandfills
-  ];
-  
-  // Apply custom names, images, and GPS to built-in landfills
-  landfillsData.forEach(landfill => {
-    if (customNames[landfill.id]) {
-      landfill.name = customNames[landfill.id];
-    }
-    if (customImages[landfill.id]) {
-      landfill.image = customImages[landfill.id];
-    }
-    if (customGPS[landfill.id]) {
-      landfill.lat = customGPS[landfill.id].lat;
-      landfill.lon = customGPS[landfill.id].lon;
-    }
-  });
-  
-  // Remove hidden vents from built-in landfills
-  landfillsData.forEach(landfill => {
-    if (hiddenVents[landfill.id]) {
-      console.log(`Removing hidden vents from landfill ${landfill.id}:`, hiddenVents[landfill.id]);
-      landfill.vents = landfill.vents.filter(v => !hiddenVents[landfill.id].includes(v));
-    }
-  });
-  
-  // Add additional vents to built-in landfills
-  landfillsData.forEach(landfill => {
-    if (additionalVents[landfill.id]) {
-      console.log(`Adding additional vents to landfill ${landfill.id} (${landfill.name}):`, additionalVents[landfill.id]);
-      landfill.vents = [...landfill.vents, ...additionalVents[landfill.id]];
-    }
-  });
-  
-  // Merge built-in and custom coordinates (deep merge for each landfill)
-  coordinatesData = {...BUILTIN_COORDINATES};
-  Object.keys(customCoordinates).forEach(landfillId => {
-    if (!coordinatesData[landfillId]) {
-      coordinatesData[landfillId] = {};
-    }
-    // Merge custom coordinates with built-in coordinates
-    coordinatesData[landfillId] = {
-      ...coordinatesData[landfillId],
-      ...customCoordinates[landfillId]
-    };
-  });
-  
-  console.log('Final landfillsData:', landfillsData);
-  console.log('Final coordinatesData:', coordinatesData);
-  
-  renderLandfillSelectList();
+  _applyLoadedData(customLandfills, customCoordinates, additionalVents, customNames, customImages, customMapsLinks, customGPS, hiddenVents);
 }
 
-// Save data
-function saveData() {
-  // Save only custom landfills (not built-in ones)
+// Save data to Firebase
+async function saveData() {
+  const { doc, setDoc } = window.firebaseFunctions;
+  const db = window.firebaseDB;
   const customLandfills = landfillsData.filter(l => typeof l.id === 'string' && l.id.startsWith('custom_'));
-  localStorage.setItem('landfills', JSON.stringify(customLandfills));
-  
-  // Save coordinates
-  // For built-in landfills: save ALL coordinates if there are any changes (added/deleted vents)
-  // For custom landfills: save ALL coordinates
   const customCoordinates = {};
-  
   Object.keys(coordinatesData).forEach(landfillId => {
     const id = landfillId.toString().startsWith('custom_') ? landfillId : parseInt(landfillId);
     const isBuiltIn = typeof id === 'number' && id <= 20;
-    
     if (!isBuiltIn) {
-      // Save all coordinates for custom landfills
       customCoordinates[landfillId] = coordinatesData[landfillId];
     } else {
-      // For built-in landfills, check if there are any changes
       const landfill = landfillsData.find(l => l.id === id);
-      const builtInLandfill = BUILTIN_LANDFILLS.find(b => b.id === id);
-      
-      if (landfill && builtInLandfill) {
-        // Check if vents list has changed
-        const ventsChanged = 
-          landfill.vents.length !== builtInLandfill.vents.length ||
-          landfill.vents.some(v => !builtInLandfill.vents.includes(v)) ||
-          builtInLandfill.vents.some(v => !landfill.vents.includes(v));
-        
-        if (ventsChanged) {
-          // If vents changed, save ALL coordinates for this landfill
-          console.log(`Vents changed for landfill ${id}, saving ALL coordinates`);
-          customCoordinates[landfillId] = coordinatesData[landfillId] || {};
-        } else {
-          // If vents didn't change, only save coordinates for additional vents
-          const additionalVentCoords = {};
-          Object.keys(coordinatesData[landfillId] || {}).forEach(ventName => {
-            if (!builtInLandfill.vents.includes(ventName)) {
-              additionalVentCoords[ventName] = coordinatesData[landfillId][ventName];
-            }
-          });
-          
-          if (Object.keys(additionalVentCoords).length > 0) {
-            customCoordinates[landfillId] = additionalVentCoords;
-          }
-        }
+      const builtIn = BUILTIN_LANDFILLS.find(b => b.id === id);
+      if (landfill && builtIn) {
+        const changed = landfill.vents.length !== builtIn.vents.length || landfill.vents.some(v => !builtIn.vents.includes(v));
+        if (changed) customCoordinates[landfillId] = coordinatesData[landfillId] || {};
       }
     }
   });
-  
-  localStorage.setItem('coordinates', JSON.stringify(customCoordinates));
-  
-  // Save additional vents for built-in landfills
   const additionalVents = {};
-  landfillsData.forEach(landfill => {
-    const isBuiltIn = typeof landfill.id === 'number' && landfill.id <= 20;
-    if (isBuiltIn) {
-      console.log(`Checking landfill ${landfill.id} for additional vents...`);
-      console.log('Current vents:', landfill.vents);
-      
-      const builtInLandfill = BUILTIN_LANDFILLS.find(b => b.id === landfill.id);
-      if (builtInLandfill) {
-        console.log('Built-in vents:', builtInLandfill.vents);
-        
-        // Find vents that are not in the original built-in list
-        const newVents = landfill.vents.filter(v => !builtInLandfill.vents.includes(v));
-        console.log('New vents found:', newVents);
-        
-        if (newVents.length > 0) {
-          console.log(`Saving additional vents for landfill ${landfill.id}:`, newVents);
-          additionalVents[landfill.id] = newVents;
-        }
-      }
-    }
-  });
-  
-  // Save hidden vents (built-in vents that were deleted)
   const hiddenVentsToSave = {};
   landfillsData.forEach(landfill => {
     const isBuiltIn = typeof landfill.id === 'number' && landfill.id <= 20;
     if (isBuiltIn) {
-      const builtInLandfill = BUILTIN_LANDFILLS.find(b => b.id === landfill.id);
-      if (builtInLandfill) {
-        // Find built-in vents that are missing (were deleted)
-        const deletedVents = builtInLandfill.vents.filter(v => !landfill.vents.includes(v));
-        if (deletedVents.length > 0) {
-          console.log(`Saving hidden vents for landfill ${landfill.id}:`, deletedVents);
-          hiddenVentsToSave[landfill.id] = deletedVents;
-        }
+      const builtIn = BUILTIN_LANDFILLS.find(b => b.id === landfill.id);
+      if (builtIn) {
+        const newVents = landfill.vents.filter(v => !builtIn.vents.includes(v));
+        if (newVents.length > 0) additionalVents[landfill.id] = newVents;
+        const deleted = builtIn.vents.filter(v => !landfill.vents.includes(v));
+        if (deleted.length > 0) hiddenVentsToSave[landfill.id] = deleted;
       }
     }
   });
-  
-  console.log('Saving to localStorage:');
-  console.log('- customLandfills:', customLandfills);
-  console.log('- additionalVents:', additionalVents);
-  console.log('- hiddenVents:', hiddenVentsToSave);
-  console.log('- customCoordinates (only additional vents for built-in):', customCoordinates);
-  
-  localStorage.setItem('additionalVents', JSON.stringify(additionalVents));
-  localStorage.setItem('hiddenVents', JSON.stringify(hiddenVentsToSave));
+  try {
+    await Promise.all([
+      setDoc(doc(db, 'mop_data', 'landfills'), { list: customLandfills }),
+      setDoc(doc(db, 'mop_data', 'coordinates'), customCoordinates),
+      setDoc(doc(db, 'mop_data', 'additionalVents'), additionalVents),
+      setDoc(doc(db, 'mop_data', 'hiddenVents'), hiddenVentsToSave)
+    ]);
+    localStorage.setItem('landfills', JSON.stringify(customLandfills));
+    localStorage.setItem('coordinates', JSON.stringify(customCoordinates));
+    localStorage.setItem('additionalVents', JSON.stringify(additionalVents));
+    localStorage.setItem('hiddenVents', JSON.stringify(hiddenVentsToSave));
+  } catch(e) {
+    console.error('Firebase save error:', e);
+    localStorage.setItem('landfills', JSON.stringify(customLandfills));
+    localStorage.setItem('coordinates', JSON.stringify(customCoordinates));
+    localStorage.setItem('additionalVents', JSON.stringify(additionalVents));
+    localStorage.setItem('hiddenVents', JSON.stringify(hiddenVentsToSave));
+    showMessage('Firebase nedostupan - spremljeno lokalno', 'error');
+  }
 }
 
 // Show tab
@@ -1442,7 +1407,7 @@ async function updateLandfillBasicInfo() {
   landfill.lat = coords.lat;
   landfill.lon = coords.lon;
   
-  // For built-in landfills, save custom data in localStorage
+  // For built-in landfills, save custom data in Firebase + localStorage
   if (isBuiltIn) {
     const customNames = JSON.parse(localStorage.getItem('customNames') || '{}');
     const customImages = JSON.parse(localStorage.getItem('customImages') || '{}');
@@ -1464,14 +1429,28 @@ async function updateLandfillBasicInfo() {
       delete customGPS[currentEditLandfillId];
     }
     
+    // Save to localStorage
     localStorage.setItem('customNames', JSON.stringify(customNames));
     localStorage.setItem('customImages', JSON.stringify(customImages));
     localStorage.setItem('customMapsLinks', JSON.stringify(customMapsLinks));
     localStorage.setItem('customGPS', JSON.stringify(customGPS));
     
-    showMessage('Promjene spremljene! Osvježi index.html da vidiš promjene.', 'success');
+    // Save to Firebase
+    try {
+      const { doc, setDoc } = window.firebaseFunctions;
+      const db = window.firebaseDB;
+      Promise.all([
+        setDoc(doc(db, 'mop_data', 'customNames'), customNames),
+        setDoc(doc(db, 'mop_data', 'customImages'), customImages),
+        setDoc(doc(db, 'mop_data', 'customMapsLinks'), customMapsLinks),
+        setDoc(doc(db, 'mop_data', 'customGPS'), customGPS)
+      ]);
+    } catch(e) {
+      console.error('Firebase save error:', e);
+    }
+    
+    showMessage('Promjene spremljene!', 'success');
   } else {
-    // For custom landfills, save through normal saveData
     saveData();
     showMessage('Promjene spremljene!', 'success');
   }
