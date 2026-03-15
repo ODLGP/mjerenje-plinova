@@ -1241,6 +1241,7 @@ window._fbCache = {
   customImages: null,
   customMapsLinks: null,
   customGPS: null,
+  measurements: null,
   loaded: false
 };
 
@@ -1249,7 +1250,7 @@ async function loadAllFromFirebase() {
   try {
     const { doc, getDoc } = window.firebaseFunctions;
     const db = window.firebaseDB;
-    const keys = ['landfills','additionalVents','hiddenVents','coordinates','customNames','customImages','customMapsLinks','customGPS'];
+    const keys = ['landfills','additionalVents','hiddenVents','coordinates','customNames','customImages','customMapsLinks','customGPS','measurements'];
     const results = await Promise.all(keys.map(k => getDoc(doc(db, 'mop_data', k))));
     keys.forEach((k, i) => {
       if (results[i].exists()) {
@@ -2252,10 +2253,43 @@ function finishMeasurement() {
   openSuccessModal();
 }
 function loadMeasurements() {
+  // Use Firebase cache if available (loaded at startup)
+  if (window._fbCache && window._fbCache.measurements !== null) {
+    const data = window._fbCache.measurements;
+    return data.list || data || [];
+  }
   return JSON.parse(localStorage.getItem('measurements') || '[]');
 }
 function saveMeasurements(arr) {
   localStorage.setItem('measurements', JSON.stringify(arr));
+  // Update local cache
+  if (window._fbCache) window._fbCache.measurements = { list: arr };
+  // Save to Firebase async (no await - fire and forget)
+  _saveMeasurementsToFirebase(arr);
+}
+async function _saveMeasurementsToFirebase(arr) {
+  if (!window.firebaseDB) return;
+  try {
+    const { doc, setDoc } = window.firebaseFunctions;
+    await setDoc(doc(window.firebaseDB, 'mop_data', 'measurements'), { list: arr });
+  } catch(e) {
+    console.warn('Firebase measurements save failed:', e);
+  }
+}
+async function loadMeasurementsFromFirebase() {
+  if (!window.firebaseDB) return null;
+  try {
+    const { doc, getDoc } = window.firebaseFunctions;
+    const snap = await getDoc(doc(window.firebaseDB, 'mop_data', 'measurements'));
+    if (snap.exists()) {
+      const list = snap.data().list || [];
+      localStorage.setItem('measurements', JSON.stringify(list));
+      return list;
+    }
+  } catch(e) {
+    console.warn('Firebase measurements load failed:', e);
+  }
+  return null;
 }
 function updateHistoryList(filtered = null) {
   const measurements = filtered || loadMeasurements();
@@ -2621,10 +2655,14 @@ function initApp() {
     showScreen('template-landfill-screen');
     initLandfillGrid();
   });
-  document.getElementById('go-to-history').addEventListener('click', () => {
+  document.getElementById('go-to-history').addEventListener('click', async () => {
     populateFilterDropdowns();
-    updateHistoryList();
+    // Show loading state
+    document.getElementById('history-list').innerHTML = '<p style="text-align:center;color:#888;">Učitavam mjerenja...</p>';
     showScreen('measurement-history');
+    // Try to load from Firebase first
+    const fbData = await loadMeasurementsFromFirebase();
+    updateHistoryList(fbData || undefined);
   });
   document.getElementById('template-landfill-next').addEventListener('click', () => {
     const warn = document.getElementById('template-landfill-warning');
