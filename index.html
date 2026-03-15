@@ -445,6 +445,51 @@ textarea {
   margin-bottom: 10px;
   border: 1px solid #eee;
 }
+.last-measurement-badge {
+  font-size: 11px;
+  color: #888;
+  margin-top: 4px;
+  display: block;
+}
+.landfill-card.selected .last-measurement-badge { color: rgba(255,255,255,0.8); }
+
+/* Skeleton loader */
+.skeleton-card {
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card-bg);
+  box-shadow: var(--card-shadow);
+}
+.skeleton-img {
+  width: 100%;
+  height: 90px;
+  background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.skeleton-line {
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  margin: 6px auto;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Datetime display on login */
+#login-datetime {
+  font-size: 15px;
+  color: var(--primary);
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
 .time-select-group {
   display: flex;
   gap: 8px;
@@ -884,6 +929,7 @@ textarea {
         </svg>
         Mjerenje odlagališnih plinova
       </h1>
+      <div id="login-datetime"></div>
       <p style="color:#666;margin:10px 0;">Odaberite mjeritelja i uređaj za početak:</p>
     </div>
     <form autocomplete="off" id="login-form">
@@ -1689,23 +1735,52 @@ function initLandfillGrid() {
   const grid = document.getElementById('landfill-grid');
   grid.innerHTML = '';
   state.selectedLandfill = null;
-  LANDFILLS.forEach(landfill => {
-    const card = document.createElement('div');
-    card.className = 'landfill-card';
-    card.innerHTML = `
-    <img src="${landfill.image}" alt="${landfill.name}">
-      <h3>${landfill.name}</h3>
-      <button class="navigate-btn" onclick="navigateToLandfill('${landfill.mapsLink}', '${landfill.name.replace(/'/g, "\\'")}'); event.stopPropagation();" style="margin-top:10px;padding:8px 12px;background:#4285f4;color:white;border:none;border-radius:5px;cursor:pointer;font-size:13px;width:100%;">
-        🗺️ Navigiraj
-      </button>
-    `;
-    card.addEventListener('click', () => {
-      document.querySelectorAll('.landfill-card').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-      state.selectedLandfill = landfill;
-    });
-    grid.appendChild(card);
+
+  // Show skeleton loaders first
+  for (let i = 0; i < 6; i++) {
+    const sk = document.createElement('div');
+    sk.className = 'skeleton-card';
+    sk.innerHTML = `<div class="skeleton-img"></div><div class="skeleton-line" style="width:80%;"></div><div class="skeleton-line" style="width:50%;"></div>`;
+    grid.appendChild(sk);
+  }
+
+  // Get last measurement dates per landfill
+  const measurements = loadMeasurements();
+  const lastMeasurementByLandfill = {};
+  measurements.forEach(m => {
+    const id = m.landfill?.id;
+    if (!id) return;
+    if (!lastMeasurementByLandfill[id] || m.date > lastMeasurementByLandfill[id]) {
+      lastMeasurementByLandfill[id] = m.date;
+    }
   });
+
+  // Render real cards after short delay (feels smoother)
+  setTimeout(() => {
+    grid.innerHTML = '';
+    LANDFILLS.forEach(landfill => {
+      const card = document.createElement('div');
+      card.className = 'landfill-card';
+      const lastDate = lastMeasurementByLandfill[landfill.id];
+      const lastDateStr = lastDate
+        ? `📅 Zadnje: ${lastDate.split('-').reverse().join('.')}`
+        : '📅 Još nije mjereno';
+      card.innerHTML = `
+        <img src="${landfill.image}" alt="${landfill.name}">
+        <h3>${landfill.name}</h3>
+        <span class="last-measurement-badge">${lastDateStr}</span>
+        <button class="navigate-btn" onclick="navigateToLandfill('${landfill.mapsLink}', '${landfill.name.replace(/'/g, "\\'")}'); event.stopPropagation();" style="margin-top:10px;padding:8px 12px;background:#4285f4;color:white;border:none;border-radius:5px;cursor:pointer;font-size:13px;width:100%;">
+          🗺️ Navigiraj
+        </button>
+      `;
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.landfill-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        state.selectedLandfill = landfill;
+      });
+      grid.appendChild(card);
+    });
+  }, 400);
 }
 
 function navigateToLandfill(mapsLink, name) {
@@ -2301,6 +2376,8 @@ function saveMeasurements(arr) {
   localStorage.setItem('measurements', JSON.stringify(arr));
   // Update local cache
   if (window._fbCache) window._fbCache.measurements = { list: arr };
+  // Vibrate on save (mobile)
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
   // Save to Firebase async (no await - fire and forget)
   _saveMeasurementsToFirebase(arr);
 }
@@ -2327,6 +2404,24 @@ async function loadMeasurementsFromFirebase() {
     console.warn('Firebase measurements load failed:', e);
   }
   return null;
+}
+
+// === DATETIME CLOCK ===
+let _clockInterval = null;
+function startLoginClock() {
+  const el = document.getElementById('login-datetime');
+  if (!el) return;
+  clearInterval(_clockInterval);
+  function update() {
+    const now = new Date();
+    const days = ['Nedjelja','Ponedjeljak','Utorak','Srijeda','Četvrtak','Petak','Subota'];
+    const day = days[now.getDay()];
+    const date = now.toLocaleDateString('hr-HR', { day:'2-digit', month:'2-digit', year:'numeric' });
+    const time = now.toLocaleTimeString('hr-HR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    el.textContent = `${day}, ${date} — ${time}`;
+  }
+  update();
+  _clockInterval = setInterval(update, 1000);
 }
 
 // === NOTIFICATIONS ===
@@ -2772,6 +2867,7 @@ function initApp() {
     }
     showScreen('login-screen');
     loadNotifications();
+    startLoginClock();
   });
 
   document.getElementById('login-form').addEventListener('submit', e => {
