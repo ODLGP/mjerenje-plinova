@@ -823,7 +823,7 @@ async function loadData() {
   const db = window.firebaseDB;
   try {
     showMessage('Ucitavam podatke...', 'info');
-    const [lSnap, cSnap, aSnap, nSnap, iSnap, mSnap, gSnap, hSnap] = await Promise.all([
+    const [lSnap, cSnap, aSnap, nSnap, iSnap, mSnap, gSnap, hSnap, imgSnap] = await Promise.all([
       getDoc(doc(db, 'mop_data', 'landfills')),
       getDoc(doc(db, 'mop_data', 'coordinates')),
       getDoc(doc(db, 'mop_data', 'additionalVents')),
@@ -831,9 +831,18 @@ async function loadData() {
       getDoc(doc(db, 'mop_data', 'customImages')),
       getDoc(doc(db, 'mop_data', 'customMapsLinks')),
       getDoc(doc(db, 'mop_data', 'customGPS')),
-      getDoc(doc(db, 'mop_data', 'hiddenVents'))
+      getDoc(doc(db, 'mop_data', 'hiddenVents')),
+      getDoc(doc(db, 'mop_data', 'landfillImages'))
     ]);
-    const customLandfills = lSnap.exists() ? lSnap.data().list || [] : [];
+    let customLandfills = lSnap.exists() ? lSnap.data().list || [] : [];
+    const landfillImages = imgSnap.exists() ? imgSnap.data() : {};
+    // Restore base64 images into landfills
+    customLandfills = customLandfills.map(l => {
+      if (l.image === '__base64__' && landfillImages[l.id]) {
+        return { ...l, image: landfillImages[l.id] };
+      }
+      return l;
+    });
     const customCoordinates = cSnap.exists() ? cSnap.data() : {};
     const additionalVents = aSnap.exists() ? aSnap.data() : {};
     const customNames = nSnap.exists() ? nSnap.data() : {};
@@ -890,6 +899,17 @@ async function saveData() {
   const { doc, setDoc } = window.firebaseFunctions;
   const db = window.firebaseDB;
   const customLandfills = landfillsData.filter(l => typeof l.id === 'string' && l.id.startsWith('custom_'));
+
+  // Extract base64 images into separate document to avoid 1MB Firestore limit
+  const landfillImages = {};
+  const landfillsWithoutImages = customLandfills.map(l => {
+    if (l.image && l.image.startsWith('data:')) {
+      landfillImages[l.id] = l.image;
+      return { ...l, image: '__base64__' };
+    }
+    return l;
+  });
+
   const customCoordinates = {};
   Object.keys(coordinatesData).forEach(landfillId => {
     const id = landfillId.toString().startsWith('custom_') ? landfillId : parseInt(landfillId);
@@ -920,22 +940,28 @@ async function saveData() {
     }
   });
   try {
-    await Promise.all([
-      setDoc(doc(db, 'mop_data', 'landfills'), { list: customLandfills }),
+    const saves = [
+      setDoc(doc(db, 'mop_data', 'landfills'), { list: landfillsWithoutImages }),
       setDoc(doc(db, 'mop_data', 'coordinates'), customCoordinates),
       setDoc(doc(db, 'mop_data', 'additionalVents'), additionalVents),
       setDoc(doc(db, 'mop_data', 'hiddenVents'), hiddenVentsToSave)
-    ]);
+    ];
+    if (Object.keys(landfillImages).length > 0) {
+      saves.push(setDoc(doc(db, 'mop_data', 'landfillImages'), landfillImages));
+    }
+    await Promise.all(saves);
     localStorage.setItem('landfills', JSON.stringify(customLandfills));
     localStorage.setItem('coordinates', JSON.stringify(customCoordinates));
     localStorage.setItem('additionalVents', JSON.stringify(additionalVents));
     localStorage.setItem('hiddenVents', JSON.stringify(hiddenVentsToSave));
+    localStorage.setItem('landfillImages', JSON.stringify(landfillImages));
   } catch(e) {
     console.error('Firebase save error:', e);
     localStorage.setItem('landfills', JSON.stringify(customLandfills));
     localStorage.setItem('coordinates', JSON.stringify(customCoordinates));
     localStorage.setItem('additionalVents', JSON.stringify(additionalVents));
     localStorage.setItem('hiddenVents', JSON.stringify(hiddenVentsToSave));
+    localStorage.setItem('landfillImages', JSON.stringify(landfillImages));
     showMessage('Firebase nedostupan - spremljeno lokalno', 'error');
   }
 }
