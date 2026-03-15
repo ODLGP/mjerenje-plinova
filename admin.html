@@ -954,6 +954,26 @@ function showMessage(msg, type) {
   setTimeout(() => div.style.display = 'none', 3000);
 }
 
+// Log activity to Firebase
+async function logActivity(text, detail) {
+  if (!window.firebaseDB) return;
+  try {
+    const { doc, getDoc, setDoc } = window.firebaseFunctions;
+    const db = window.firebaseDB;
+    const snap = await getDoc(doc(db, 'mop_data', 'activityLog'));
+    const existing = snap.exists() ? (snap.data().list || []) : [];
+    const now = new Date();
+    const timestamp = now.toISOString().slice(0,16).replace('T',' ');
+    const id = 'log_' + now.getTime();
+    existing.unshift({ id, text, detail: detail || '', timestamp, source: 'admin' });
+    // Keep last 50 entries
+    const trimmed = existing.slice(0, 50);
+    await setDoc(doc(db, 'mop_data', 'activityLog'), { list: trimmed });
+  } catch(e) {
+    console.warn('logActivity failed:', e);
+  }
+}
+
 // ===== TAB 1: ADD NEW LANDFILL =====
 
 // Add vent to new landfill
@@ -1293,6 +1313,7 @@ async function saveNewLandfill() {
   coordinatesData[newId] = {...newLandfillCoords};
   
   saveData();
+  logActivity(`➕ Dodano novo odlagalište: <strong>${name}</strong>`, `${newLandfillVents.length} odušnika`);
   
   // Reset form
   document.getElementById('new-landfill-name').value = '';
@@ -1450,9 +1471,11 @@ async function updateLandfillBasicInfo() {
     }
     
     showMessage('Promjene spremljene!', 'success');
+    logActivity(`✏️ Ažurirani podaci za: <strong>${name}</strong>`, mapsLink ? 'Navigacija ažurirana' : '');
   } else {
     saveData();
     showMessage('Promjene spremljene!', 'success');
+    logActivity(`✏️ Ažurirani podaci za: <strong>${name}</strong>`, '');
   }
   
   document.getElementById('edit-picker-image').src = image;
@@ -1501,6 +1524,7 @@ function addVentToExisting() {
   selectLandfillForEdit(currentEditLandfillId);
   
   showMessage('Odušnik dodan!', 'success');
+  logActivity(`🔧 Dodan odušnik <strong>${ventName}</strong> na odlagalište: <strong>${landfill.name}</strong>`, '');
 }
 
 // Render edit vents list
@@ -1637,6 +1661,7 @@ function deleteLandfill() {
   delete coordinatesData[currentEditLandfillId];
   
   saveData();
+  logActivity(`🗑️ Obrisano odlagalište: <strong>${landfill.name}</strong>`, '');
   
   document.getElementById('edit-landfill-section').style.display = 'none';
   currentEditLandfillId = null;
