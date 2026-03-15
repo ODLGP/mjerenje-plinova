@@ -12,6 +12,28 @@
 <title>♻️ Mjerenje odlagališnih plinova</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAjAHmqlfgPJxdlrGmyM-r7CgF7lIuLGCw",
+    authDomain: "mop-admin.firebaseapp.com",
+    projectId: "mop-admin",
+    storageBucket: "mop-admin.firebasestorage.app",
+    messagingSenderId: "583593879937",
+    appId: "1:583593879937:web:97447a5b9aac2659482080"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  window.firebaseDB = db;
+  window.firebaseFunctions = { doc, getDoc };
+  window.firebaseReady = true;
+  document.dispatchEvent(new Event('firebaseReady'));
+</script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 <style>
 :root {
@@ -1208,16 +1230,67 @@ function extractCoordinatesFromMapsLink(mapsLink) {
   return { lat: null, lon: null };
 }
 
+// === FIREBASE DATA LOADING ===
+// Cached Firebase data (loaded once on startup)
+window._fbCache = {
+  landfills: null,
+  additionalVents: null,
+  hiddenVents: null,
+  coordinates: null,
+  customNames: null,
+  customImages: null,
+  customMapsLinks: null,
+  customGPS: null,
+  loaded: false
+};
+
+async function loadAllFromFirebase() {
+  if (!window.firebaseDB) return false;
+  try {
+    const { doc, getDoc } = window.firebaseFunctions;
+    const db = window.firebaseDB;
+    const keys = ['landfills','additionalVents','hiddenVents','coordinates','customNames','customImages','customMapsLinks','customGPS'];
+    const results = await Promise.all(keys.map(k => getDoc(doc(db, 'mop_data', k))));
+    keys.forEach((k, i) => {
+      if (results[i].exists()) {
+        const data = results[i].data();
+        window._fbCache[k] = data;
+        // Also update localStorage as backup
+        localStorage.setItem(k === 'landfills' ? 'landfills' : k, JSON.stringify(data.list !== undefined ? data.list : data));
+      }
+    });
+    window._fbCache.loaded = true;
+    console.log('Firebase data loaded:', window._fbCache);
+    return true;
+  } catch(e) {
+    console.warn('Firebase load failed, using localStorage:', e);
+    return false;
+  }
+}
+
+function _getFromCache(key) {
+  const cache = window._fbCache[key];
+  if (cache !== null) {
+    // landfills stored as { list: [...] }
+    if (key === 'landfills') return cache.list || cache || [];
+    return cache;
+  }
+  // fallback to localStorage
+  const lsKey = key;
+  const raw = localStorage.getItem(lsKey);
+  if (!raw) return key === 'landfills' ? [] : {};
+  const parsed = JSON.parse(raw);
+  // localStorage landfills stored as array directly
+  return parsed;
+}
+
 function loadCustomLandfills() {
-  const customLandfills = JSON.parse(localStorage.getItem('landfills') || '[]');
-  return customLandfills.map(custom => {
-    // Extract coordinates from maps link if available
+  const customLandfills = _getFromCache('landfills');
+  const list = Array.isArray(customLandfills) ? customLandfills : [];
+  return list.map(custom => {
     let coords = extractCoordinatesFromMapsLink(custom.mapsLink);
-    
-    // Use stored coordinates or extracted coordinates or default
     const lat = custom.lat || coords.lat || 45.8150;
     const lon = custom.lon || coords.lon || 15.9819;
-    
     return {
       id: custom.id,
       name: custom.name,
@@ -1233,21 +1306,20 @@ function loadCustomLandfills() {
 }
 
 function loadCustomVents() {
-  const customLandfills = JSON.parse(localStorage.getItem('landfills') || '[]');
-  const additionalVents = JSON.parse(localStorage.getItem('additionalVents') || '{}');
-  const hiddenVents = JSON.parse(localStorage.getItem('hiddenVents') || '{}');
+  const customLandfills = _getFromCache('landfills');
+  const list = Array.isArray(customLandfills) ? customLandfills : [];
+  const additionalVents = _getFromCache('additionalVents');
+  const hiddenVents = _getFromCache('hiddenVents');
   
   console.log('=== loadCustomVents called ===');
-  console.log('Loading custom vents:', { customLandfills, additionalVents, hiddenVents });
+  console.log('Loading custom vents:', { list, additionalVents, hiddenVents });
   
   const vents = {};
-  
-  // Add custom landfills vents
-  customLandfills.forEach(custom => {
+  list.forEach(custom => {
     vents[custom.id] = custom.vents || [];
   });
   
-  console.log('Returning:', { customVents: vents, additionalVents: additionalVents, hiddenVents: hiddenVents });
+  console.log('Returning:', { customVents: vents, additionalVents, hiddenVents });
   
   // Return object that will be used to extend built-in vents
   return { customVents: vents, additionalVents: additionalVents, hiddenVents: hiddenVents };
@@ -1290,7 +1362,7 @@ function mergeVents(builtInVents, customData) {
 }
 
 function loadCustomCoordinates() {
-  const coords = JSON.parse(localStorage.getItem('coordinates') || '{}');
+  const coords = _getFromCache('coordinates');
   console.log('Loading custom coordinates:', coords);
   return coords;
 }
@@ -1467,10 +1539,10 @@ const LANDFILLS = [
 
 // Apply custom names and images to built-in landfills
 function applyCustomLandfillData() {
-  const customNames = JSON.parse(localStorage.getItem('customNames') || '{}');
-  const customImages = JSON.parse(localStorage.getItem('customImages') || '{}');
-  const customMapsLinks = JSON.parse(localStorage.getItem('customMapsLinks') || '{}');
-  const customGPS = JSON.parse(localStorage.getItem('customGPS') || '{}');
+  const customNames = _getFromCache('customNames');
+  const customImages = _getFromCache('customImages');
+  const customMapsLinks = _getFromCache('customMapsLinks');
+  const customGPS = _getFromCache('customGPS');
   
   console.log('Applying custom names, images, maps links and GPS:', { customNames, customImages, customMapsLinks, customGPS });
   
@@ -1504,7 +1576,8 @@ function applyCustomLandfillData() {
   });
 }
 
-// Apply custom data on page load
+// Apply custom data on page load - will be called after Firebase loads
+// (called synchronously first with localStorage, then refreshed after Firebase)
 applyCustomLandfillData();
 
 const state = {
@@ -2766,7 +2839,22 @@ window.reloadVentsData = function() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
+document.addEventListener('DOMContentLoaded', async function() {
+  // Load Firebase data first, then init app
+  await loadAllFromFirebase();
+  // Rebuild LANDFILLS with fresh Firebase data
+  // Re-run loadCustomLandfills to pick up Firebase cache
+  const customLandfillsFromFB = loadCustomLandfills();
+  // Replace custom entries in LANDFILLS (keep built-ins, replace custom tail)
+  const builtinCount = LANDFILLS.filter(l => l.id <= 20).length;
+  LANDFILLS.splice(builtinCount);
+  customLandfillsFromFB.forEach(l => LANDFILLS.push(l));
+  // Reload vents and coordinates with Firebase data
+  VENTS_BY_LANDFILL = getVentsByLandfill();
+  VENT_COORDINATES = getVentCoordinates();
+  applyCustomLandfillData();
+  initApp();
+});
 
 // === COMPARISON WITH PREVIOUS MEASUREMENT ===
 function loadPreviousMeasurement(ventName) {
