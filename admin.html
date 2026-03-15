@@ -996,7 +996,8 @@ async function logActivity(text, detail) {
     const snap = await getDoc(doc(db, 'mop_data', 'activityLog'));
     const existing = snap.exists() ? (snap.data().list || []) : [];
     const now = new Date();
-    const timestamp = now.toISOString().slice(0,16).replace('T',' ');
+    const pad = n => String(n).padStart(2,'0');
+    const timestamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
     const id = 'log_' + now.getTime();
     existing.unshift({ id, text, detail: detail || '', timestamp, source: 'admin' });
     // Keep last 50 entries
