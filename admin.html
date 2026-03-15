@@ -510,11 +510,11 @@ body {
         <div class="form-group">
           <label>Slika odlagališta:</label>
           <div style="display:flex;gap:10px;align-items:center;">
-            <input type="text" id="new-landfill-image" placeholder="slike/odlagalista/naziv.jpg" style="flex:1;">
+            <input type="text" id="new-landfill-image" placeholder="Odaberi sliku klikom na gumb →" style="flex:1;">
             <input type="file" id="new-landfill-image-file" accept="image/*" style="display:none;">
             <button class="btn btn-primary" onclick="document.getElementById('new-landfill-image-file').click()" type="button">📁 Odaberi sliku</button>
           </div>
-          <small>Odaberi sliku iz mape: mop_offline/slike/odlagalista/</small>
+          <small>Slika se automatski sprema u bazu - nema potrebe za ručnim kopiranjem!</small>
           <div id="new-image-preview" style="margin-top:10px;display:none;">
             <img src="" alt="Preview" style="max-width:300px;border-radius:8px;border:2px solid #ddd;">
           </div>
@@ -690,49 +690,56 @@ function handleImageSelection(event, type) {
     alert('Molim odaberi sliku (JPG, PNG, itd.)');
     return;
   }
-  
-  // Get the file path relative to mop_offline folder
-  const fileName = file.name;
-  const relativePath = 'slike/odlagalista/' + fileName;
-  
-  // Set the path in the text input
-  const inputId = type === 'new' ? 'new-landfill-image' : 'edit-landfill-image';
-  document.getElementById(inputId).value = relativePath;
-  
-  // Show preview
+
+  // Compress and convert to base64
   const reader = new FileReader();
   reader.onload = function(e) {
-    const previewId = type === 'new' ? 'new-image-preview' : 'edit-image-preview';
-    const previewDiv = document.getElementById(previewId);
-    const img = previewDiv.querySelector('img');
-    img.src = e.target.result;
-    previewDiv.style.display = 'block';
-    
-    // Update the map picker image if in new landfill tab
-    if (type === 'new') {
-      const pickerImg = document.getElementById('new-picker-image');
-      pickerImg.src = e.target.result;
-      pickerImg.style.display = 'block';
-      setTimeout(() => {
-        renderNewCoordinateMarkers();
-        if (!newPickerInitialized) {
-          initNewCoordinatePicker();
-          newPickerInitialized = true;
-        }
-      }, 100);
-    }
-    
-    // Update the map picker image if in edit tab
-    if (type === 'edit') {
-      const pickerImg = document.getElementById('edit-picker-image');
-      pickerImg.src = e.target.result;
-      renderEditCoordinateMarkers();
-    }
+    const originalDataUrl = e.target.result;
+
+    // Compress via canvas
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      const MAX = 800;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const compressed = canvas.toDataURL('image/jpeg', 0.75);
+
+      // Store base64 in the text input
+      const inputId = type === 'new' ? 'new-landfill-image' : 'edit-landfill-image';
+      document.getElementById(inputId).value = compressed;
+
+      // Show preview
+      const previewId = type === 'new' ? 'new-image-preview' : 'edit-image-preview';
+      const previewDiv = document.getElementById(previewId);
+      previewDiv.querySelector('img').src = compressed;
+      previewDiv.style.display = 'block';
+
+      if (type === 'new') {
+        const pickerImg = document.getElementById('new-picker-image');
+        pickerImg.src = compressed;
+        pickerImg.style.display = 'block';
+        setTimeout(() => {
+          renderNewCoordinateMarkers();
+          if (!newPickerInitialized) { initNewCoordinatePicker(); newPickerInitialized = true; }
+        }, 100);
+      }
+      if (type === 'edit') {
+        const pickerImg = document.getElementById('edit-picker-image');
+        pickerImg.src = compressed;
+        renderEditCoordinateMarkers();
+      }
+
+      showMessage('✅ Slika učitana i komprimirana!', 'success');
+    };
+    img.src = originalDataUrl;
   };
   reader.readAsDataURL(file);
-  
-  // Show warning about file location
-  showMessage(`⚠️ VAŽNO: Sliku "${fileName}" moraš ručno kopirati u mapu: mop_offline/slike/odlagalista/`, 'error');
 }
 
 // Clear localStorage (for debugging)
@@ -1262,7 +1269,7 @@ async function saveNewLandfill() {
   }
   
   if (!image) {
-    alert('Unesite putanju do slike!');
+    alert('Odaberite sliku odlagališta!');
     return;
   }
   
