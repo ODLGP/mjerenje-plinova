@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="hr">
 <head>
 <meta charset="utf-8">
@@ -2573,7 +2573,8 @@ async function loadNotifications() {
   }
 }
 function updateHistoryList(filtered = null) {
-  const measurements = filtered || loadMeasurements();
+  const allMeasurements = loadMeasurements();
+  const measurements = filtered || allMeasurements;
   const historyList = document.getElementById('history-list');
   historyList.innerHTML = '';
   if (measurements.length === 0) {
@@ -2581,7 +2582,7 @@ function updateHistoryList(filtered = null) {
     return;
   }
   measurements.slice().reverse().forEach((m, revIdx) => {
-    const originalIndex = measurements.length - 1 - revIdx;
+    const originalIndex = allMeasurements.indexOf(m);
     const item = document.createElement('div');
     item.className = 'history-item';
     const ventCount = m.vents ? m.vents.length : 0;
