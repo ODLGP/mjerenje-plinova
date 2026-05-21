@@ -719,8 +719,7 @@ textarea {
   display: none;
 }
 .comparison-panel.show {
-  display: block;
-  animation: fadeIn 0.3s ease;
+  display: none !important;
 }
 .comparison-header {
   display: flex;
@@ -1159,6 +1158,8 @@ textarea {
     <input id="vent-index" type="hidden" value="-1">
     <label>Naziv odušnika:</label>
     <input id="vent-name" required type="text" readonly>
+    <button type="button" id="prev-measurement-btn" onclick="showPrevMeasurementModal()" style="background:#5c6bc0;padding:10px;font-size:14px;margin-top:5px;display:none;width:100%;">📋 Pogledaj prošlo mjerenje</button>
+    <button type="button" id="prev-measurement-btn" onclick="showPrevMeasurementModal()" style="background:#5c6bc0;padding:10px;font-size:14px;margin-top:5px;display:none;">📋 Pogledaj prošlo mjerenje</button>
     
     <!-- Comparison Panel -->
     <div class="comparison-panel" id="comparison-panel">
@@ -3994,5 +3995,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </script>
 
+<div id="prev-measurement-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:5000;align-items:center;justify-content:center;">
+  <div style="background:var(--card-bg);border-radius:12px;padding:25px;max-width:420px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.3);max-height:80vh;overflow-y:auto;">
+    <div id="prev-measurement-content"></div>
+    <button type="button" onclick="closePrevMeasurementModal()" style="margin-top:15px;background:#666;">Zatvori</button>
+  </div>
+</div>
+<script src="prev_measurement.js"></script>
 </body>
-</html>
