@@ -1893,22 +1893,20 @@ function closeSuccessModal() {
 // Funkcija za dohvaćanje vremenskih podataka s Open-Meteo API
 async function fetchWeatherData(lat, lon) {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,surface_pressure,wind_speed_10m,wind_direction_10m&timezone=Europe/Zagreb&wind_speed_unit=ms`;
+    const url = 'https://wttr.in/' + lat + ',' + lon + '?format=j1';
     const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error('Greška pri dohvaćanju vremenskih podataka');
-    }
-    
+    if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
+    const cur = data.current_condition[0];
+    const windDeg = parseInt(cur.winddirDegree);
     return {
-      temperature: data.current.temperature_2m.toFixed(1),
-      pressure: data.current.surface_pressure.toFixed(1),
-      windSpeed: data.current.wind_speed_10m.toFixed(1),
-      windDirection: getWindDirection(data.current.wind_direction_10m)
+      temperature: parseFloat(cur.temp_C).toFixed(1),
+      pressure: parseFloat(cur.pressure).toFixed(1),
+      windSpeed: (parseFloat(cur.windspeedKmph) / 3.6).toFixed(1),
+      windDirection: getWindDirection(windDeg)
     };
   } catch (error) {
-    console.error('Greška:', error);
+    console.error('Weather error:', error);
     return null;
   }
 }
