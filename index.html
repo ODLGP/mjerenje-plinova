@@ -2581,7 +2581,7 @@ function updateHistoryList(filtered = null) {
     return;
   }
   measurements.slice().reverse().forEach((m, revIdx) => {
-    const originalIndex = allMeasurements.indexOf(m);
+    const originalIndex = allMeasurements.findIndex(function(x){ return x.date === m.date && x.measurer === m.measurer && (x.landfill && m.landfill && x.landfill.name === m.landfill.name); });
     const item = document.createElement('div');
     item.className = 'history-item';
     const ventCount = m.vents ? m.vents.length : 0;
