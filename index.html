@@ -1614,7 +1614,7 @@ function getVentsByLandfill() {
 }
 
 // Initialize VENTS_BY_LANDFILL
-let VENTS_BY_LANDFILL = getVentsByLandfill();
+let VENTS_BY_LANDFILL = getVentsByLandfill(); window.VENTS_BY_LANDFILL = VENTS_BY_LANDFILL;
 const LANDFILLS = [
   { id: 1, name: 'Odlagalište otpada Križevci', image: 'slike/odlagalista/Krizevci.jpg', lat: 46.0219, lon: 16.5425, mapsLink: '', 
     client: 'Čistoća Križevci d.o.o., Ulica Ivana Gorana Kovačića 1, 48260 Križevci',
@@ -2179,6 +2179,7 @@ function editVent(index) {
   document.getElementById('vent-note').value = vent.note || '';
   document.getElementById('vent-form').style.display = 'block';
   updateInputSteps();
+  setTimeout(function(){ var f = document.getElementById('vent-form'); if(f) f.scrollIntoView({behavior:'smooth', block:'start'}); }, 80);
   
   // Load previous measurement for comparison
   loadPreviousMeasurement(vent.name);
@@ -3052,6 +3053,7 @@ function initApp() {
     document.getElementById('vent-name').value = selected;
     document.getElementById('vent-form').style.display = 'block';
     updateInputSteps();
+    setTimeout(function(){ var f = document.getElementById('vent-form'); if(f) f.scrollIntoView({behavior:'smooth', block:'start'}); }, 80);
     loadPreviousMeasurement(selected);
     closeVentSelectModal();
   };
@@ -3074,6 +3076,7 @@ function initApp() {
     document.getElementById('vent-name').value = name;
     document.getElementById('vent-form').style.display = 'block';
     updateInputSteps();
+    setTimeout(function(){ var f = document.getElementById('vent-form'); if(f) f.scrollIntoView({behavior:'smooth', block:'start'}); }, 80);
     loadPreviousMeasurement(name);
     closeManualVentModal();
   };
@@ -3174,6 +3177,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   VENTS_BY_LANDFILL = getVentsByLandfill();
   VENT_COORDINATES = getVentCoordinates();
   applyCustomLandfillData();
+  window.state = state;
+  window.LANDFILLS = LANDFILLS;
   initApp();
 });
 
@@ -3809,6 +3814,7 @@ function openVentForm(ventName) {
     document.getElementById('vent-name').value = ventName;
     document.getElementById('vent-form').style.display = 'block';
     updateInputSteps();
+    setTimeout(function(){ var f = document.getElementById('vent-form'); if(f) f.scrollIntoView({behavior:'smooth', block:'start'}); }, 80);
     loadPreviousMeasurement(ventName);
   }
 }
@@ -4000,4 +4006,21 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 <script src="prev_measurement.js"></script>
+<script>
+// === CONFIG LOADER ===
+(function(){
+  var t = localStorage.getItem('mop_config') || localStorage.getItem('mop_theme');
+  if (!t) return;
+  try {
+    var cfg = JSON.parse(t);
+    var r = document.documentElement.style;
+    var cssMap = {'--primary':'--primary','--primary-light':'--primary-light','--secondary':'--secondary','--bg-color':'--bg-color','--card-bg':'--card-bg','--input-bg':'--input-bg','--text-color':'--text-color','--label-color':'--label-color','--secondary-text':'--secondary-text','--input-border':'--input-border','--table-header-bg':'--table-header-bg','--table-border':'--table-border','--hover-bg':'--hover-bg','--card-shadow':'--card-shadow'};
+    Object.keys(cssMap).forEach(function(k){ if (cfg[k]) r.setProperty(k, cfg[k]); });
+    if (cfg['font-family']) { document.body.style.fontFamily = cfg['font-family']; }
+    if (cfg['font-size']) { document.body.style.fontSize = cfg['font-size']; }
+    if (cfg['max-width']) { var mw = document.querySelector('body'); if(mw) mw.style.setProperty('max-width', cfg['max-width']); }
+  } catch(e) {}
+})();
+</script>
+<script src="rename_vent.js"></script>
 </body>
