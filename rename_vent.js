@@ -1,20 +1,27 @@
 // === RENAME VENT ===
 // Uredi -> tapni na naziv odušnika -> picker s neizmjerenim odušnicima
+// Odabir novog naziva NE sprema odmah - korisnik još može urediti parametre pa stisne Spremi
 
 (function () {
 
   document.addEventListener('DOMContentLoaded', function () {
-    var attempts = 0;
-    var iv = setInterval(function () {
-      attempts++;
-      if (window.editVent || attempts > 30) {
-        clearInterval(iv);
-        if (window.editVent) patchEditVent();
-      }
-    }, 200);
+    waitAndPatch('editVent', patchEditVent);
+    waitAndPatch('saveVentData', patchSaveVent);
     injectPickerUI();
   });
 
+  function waitAndPatch(fnName, patchFn) {
+    var attempts = 0;
+    var iv = setInterval(function () {
+      attempts++;
+      if (window[fnName] || attempts > 30) {
+        clearInterval(iv);
+        if (window[fnName]) patchFn();
+      }
+    }, 200);
+  }
+
+  // --- Patch editVent: setup tap on name field ---
   function patchEditVent() {
     var orig = window.editVent;
     window.editVent = function (index) {
@@ -41,14 +48,31 @@
     inp.style.borderBottom = '';
     inp.title = '';
     if (inp._rvH) { inp.removeEventListener('click', inp._rvH); inp._rvH = null; }
+    window._pendingRenameIdx = undefined;
+    window._pendingRenameName = undefined;
   }
 
+  // Teardown when new vent opened (not edit)
   document.addEventListener('click', function (e) {
     if (!e.target) return;
     var id = e.target.id;
     if (id === 'vent-select-confirm' || id === 'manual-vent-confirm') setTimeout(teardown, 150);
   });
 
+  // --- Patch saveVentData: apply pending rename before saving ---
+  function patchSaveVent() {
+    var orig = window.saveVentData;
+    window.saveVentData = function () {
+      // Ako je naziv promijenjen kroz picker, naziv je već u input polju
+      // Samo resetiraj pending state i pozovi original
+      window._pendingRenameIdx = undefined;
+      window._pendingRenameName = undefined;
+      orig.call(this);
+      teardown();
+    };
+  }
+
+  // --- Picker UI ---
   function injectPickerUI() {
     var el = document.createElement('div');
     el.id = 'rv-picker';
@@ -72,7 +96,6 @@
   function openPicker(editIdx) {
     _editIdx = editIdx;
 
-    // Dohvati ID odlagališta
     var landfillId = null;
     if (window.state) {
       var sl = window.state.selectedLandfill;
@@ -80,19 +103,16 @@
       landfillId = (sl && sl.id) || (ml && ml.id);
     }
 
-    // Dohvati sve odušnike
     var allVents = [];
     if (window.VENTS_BY_LANDFILL && landfillId) {
       allVents = window.VENTS_BY_LANDFILL[landfillId] ||
                  window.VENTS_BY_LANDFILL[parseInt(landfillId)] || [];
     }
 
-    // Izmjereni u trenutnom mjerenju
     var vents = (window.state && window.state.currentMeasurement && window.state.currentMeasurement.vents) || [];
     var measuredNames = vents.map(function (v) { return v.name; });
     var currentName = (vents[editIdx] || {}).name || '';
 
-    // Samo neizmjereni
     var unmeasured = allVents.filter(function (n) {
       return n !== currentName && measuredNames.indexOf(n) < 0;
     });
@@ -122,18 +142,18 @@
   }
 
   function applyRename(newName) {
-    var vents = window.state && window.state.currentMeasurement && window.state.currentMeasurement.vents;
-    if (!vents || _editIdx < 0) { closePicker(); return; }
-    var oldVent = vents[_editIdx];
-    if (!oldVent || oldVent.name === newName) { closePicker(); return; }
-    vents[_editIdx] = Object.assign({}, oldVent, { name: newName });
+    if (_editIdx < 0) { closePicker(); return; }
+
+    // Upiši novi naziv u input polje - forma ostaje otvorena
+    var inp = document.getElementById('vent-name');
+    if (inp) {
+      inp.value = newName;
+      inp.style.borderBottom = '2px solid var(--secondary,#ff9800)';
+      inp.title = 'Naziv promijenjen – stisni Spremi odušnik za potvrdu';
+    }
+
     closePicker();
-    teardown();
-    var form = document.getElementById('vent-form');
-    if (form) form.style.display = 'none';
-    if (typeof window.updateVentTable === 'function') window.updateVentTable();
-    if (typeof window.updateMissingVentsWarning === 'function') window.updateMissingVentsWarning();
-    if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+    // Forma ostaje otvorena - korisnik može još urediti parametre
   }
 
 })();
