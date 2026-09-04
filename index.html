@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+t<!DOCTYPE html>
 <html lang="hr">
 <head>
 <meta charset="utf-8">
@@ -2425,7 +2425,11 @@ function loadMeasurements() {
   // Use Firebase cache if available (loaded at startup)
   if (window._fbCache && window._fbCache.measurements !== null) {
     const data = window._fbCache.measurements;
-    return data.list || data || [];
+    const fbList = data.list || data || [];
+    // Merge with localStorage to ensure locally saved measurements are included
+    const local = JSON.parse(localStorage.getItem('measurements') || '[]');
+    if (local.length > fbList.length) return local;
+    return fbList;
   }
   return JSON.parse(localStorage.getItem('measurements') || '[]');
 }
@@ -4024,4 +4028,5 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script src="rename_vent.js"></script>
 <script src="chart_view.js"></script>
+<script src="ai_assistant.js"></script>
 </body>
