@@ -7,7 +7,7 @@
   // ─── Konstante ────────────────────────────────────────────────────────────
   var LS_API_KEY = 'mop_openrouter_api_key';
   var AI_ENDPOINT = 'https://text.pollinations.ai/';
-  var AI_MODEL = 'mistral'; // besplatan, bez ključa
+  var AI_MODEL = 'openai-fast'; // besplatan, bez ključa
 
   var SYSTEM_PROMPT = `Ti si AI asistent specijaliziran za mjerenje odlagališnih plinova. 
 Radiš unutar mobilne terenske aplikacije MOP (Mjerenje Odlagališnih Plinova) tvrtke Dvokut.
