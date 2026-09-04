@@ -1,11 +1,12 @@
-const CACHE_NAME = 'mop-mjerenje-v62';
+const CACHE_NAME = 'mop-mjerenje-v63';
 const urlsToCache = [
   './index.html',
   './manifest.json',
   './icon-192.png',
   './rename_vent.js',
   './chart_view.js',
-  './ai_assistant.js',
+  // ai_assistant.js se NE cachira - uvijek svježe s mreže
+  './icon-512.png',
   // Slike uređaja
   './slike/uredjaji/GA5000.jpg',
   './slike/uredjaji/Optima-Biogas.png',
@@ -59,6 +60,20 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+
+  // Za JS fajlove - uvijek dohvati s mreže, cache kao fallback
+  if (event.request.destination === 'script') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
 
   // Za HTML fajlove - uvijek dohvati s mreže, cache kao fallback
   if (event.request.destination === 'document') {
