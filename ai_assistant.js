@@ -8,7 +8,7 @@
   var LS_API_KEY = 'mop_gemini_api_key';
   // Fallback lista modela - pokušava redom dok ne uspije
   var GEMINI_MODELS = [
-    'gemini-2.5-flash',
+    'gemini-flash-latest',
     'gemini-2.5-flash-lite',
     'gemini-3.5-flash'
   ];
