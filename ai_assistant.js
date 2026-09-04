@@ -8,9 +8,9 @@
   var LS_API_KEY = 'mop_gemini_api_key';
   // Fallback lista modela - pokušava redom dok ne uspije
   var GEMINI_MODELS = [
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
-    'gemini-1.5-flash'
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-3.5-flash'
   ];
   var GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
   var GEMINI_ENDPOINT = GEMINI_BASE + GEMINI_MODELS[0] + ':generateContent?key=';
