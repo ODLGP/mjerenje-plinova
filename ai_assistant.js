@@ -5,15 +5,9 @@
   'use strict';
 
   // ─── Konstante ────────────────────────────────────────────────────────────
-  var LS_API_KEY = 'mop_gemini_api_key';
-  // Fallback lista modela - pokušava redom dok ne uspije
-  var GEMINI_MODELS = [
-    'gemini-flash-latest',
-    'gemini-2.5-flash-lite',
-    'gemini-3.5-flash'
-  ];
-  var GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
-  var GEMINI_ENDPOINT = GEMINI_BASE + GEMINI_MODELS[0] + ':generateContent?key=';
+  var LS_API_KEY = 'mop_openrouter_api_key';
+  var AI_ENDPOINT = 'https://text.pollinations.ai/openai';
+  var AI_MODEL = 'openai'; // besplatan, bez ključa
 
   var SYSTEM_PROMPT = `Ti si AI asistent specijaliziran za mjerenje odlagališnih plinova. 
 Radiš unutar mobilne terenske aplikacije MOP (Mjerenje Odlagališnih Plinova) tvrtke Dvokut.
@@ -49,11 +43,10 @@ Odgovaraj kratko, jasno i na hrvatskom jeziku. Ako korisnik pita o vrijednostima
       <span>🤖</span>
       <div>
         <div style="font-weight:600;font-size:15px;">AI Asistent</div>
-        <div id="ai-chat-status">Gemini AI • Mjerenje plinova</div>
+        <div id="ai-chat-status">AI Asistent • Mjerenje plinova</div>
       </div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;">
-      <button id="ai-key-btn" onclick="aiShowKeyModal()" title="Postavi API ključ" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 10px;font-size:12px;border-radius:6px;cursor:pointer;width:auto;margin:0;">🔑</button>
       <button id="ai-context-btn" onclick="aiSendContext()" title="Pošalji kontekst mjerenja" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 10px;font-size:12px;border-radius:6px;cursor:pointer;width:auto;margin:0;">📊</button>
       <button onclick="aiToggleChat()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;padding:0;width:32px;margin:0;line-height:1;">×</button>
     </div>
@@ -91,10 +84,10 @@ Odgovaraj kratko, jasno i na hrvatskom jeziku. Ako korisnik pita o vrijednostima
 <!-- API KEY MODAL -->
 <div id="ai-key-modal" onclick="if(event.target===this)aiHideKeyModal()">
   <div id="ai-key-modal-content">
-    <h3 style="margin-top:0;color:var(--primary);">🔑 Gemini API ključ</h3>
+    <h3 style="margin-top:0;color:var(--primary);">🔑 OpenRouter API ključ</h3>
     <p style="font-size:13px;color:var(--secondary-text);margin-bottom:15px;">
       Besplatni API ključ možeš dobiti na 
-      <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--primary);">aistudio.google.com</a>
+      <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--primary);">openrouter.ai/keys</a>
     </p>
     <input type="password" id="ai-key-input" placeholder="AIzaSy..." style="margin-bottom:12px;">
     <div style="display:flex;gap:8px;">
@@ -424,11 +417,11 @@ body.dark #ai-no-key-warning {
   };
 
   function checkApiKey() {
-    var key = getApiKey();
+    // Nema API ključa - sve je besplatno
     var warning = document.getElementById('ai-no-key-warning');
     var sendBtn = document.getElementById('ai-send-btn');
-    if (warning) warning.style.display = key ? 'none' : 'block';
-    if (sendBtn) sendBtn.disabled = !key;
+    if (warning) warning.style.display = 'none';
+    if (sendBtn) sendBtn.disabled = false;
   }
 
   // ─── Chat toggle ──────────────────────────────────────────────────────────
@@ -593,16 +586,10 @@ body.dark #ai-no-key-warning {
   };
 
   function aiSendMessage(userText, ctx) {
-    var key = getApiKey();
-    if (!key) {
-      aiShowKeyModal();
-      return;
-    }
-
     // Prikaži korisnikovu poruku
     aiAppendMsg('user', userText);
 
-    // Pripremi kontekst string za API
+    // Pripremi kontekst string
     var contextBlock = '';
     if (ctx) {
       contextBlock = '\n\n[KONTEKST MJERENJA]\n' + JSON.stringify(ctx, null, 2) + '\n[/KONTEKST MJERENJA]\n\n';
@@ -614,97 +601,55 @@ body.dark #ai-no-key-warning {
     var sendBtn = document.getElementById('ai-send-btn');
     if (sendBtn) sendBtn.disabled = true;
 
-    // Pripremi history za Gemini API
-    var contents = [];
-
-    // Dodaj prethodne poruke iz historije
+    // Pripremi messages
+    var messages = [{ role: 'system', content: SYSTEM_PROMPT }];
     chatHistory.forEach(function (msg) {
-      contents.push({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }]
-      });
+      messages.push({ role: msg.role === 'model' ? 'assistant' : 'user', content: msg.text });
     });
-
-    // Dodaj trenutnu poruku s kontekstom
-    contents.push({
-      role: 'user',
-      parts: [{ text: contextBlock + userText }]
-    });
-
-    // Spremi u history (bez kontekst bloka za čišći prikaz)
+    messages.push({ role: 'user', content: contextBlock + userText });
     chatHistory.push({ role: 'user', text: userText });
 
-    // Pozovi Gemini API s fallback logikom
-    function tryModel(modelIndex) {
-      var modelName = GEMINI_MODELS[modelIndex];
-      var endpoint = GEMINI_BASE + modelName + ':generateContent?key=' + key;
-
-      fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: SYSTEM_PROMPT }]
-          },
-          contents: contents,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024
-          }
-        })
+    // Pozovi API bez ključa
+    fetch(AI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1024,
+        private: true
       })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        // Ako model nije dostupan, pokušaj sljedeći
-        if (data.error && modelIndex + 1 < GEMINI_MODELS.length) {
-          var msg = (data.error.message || '').toLowerCase();
-          if (msg.includes('not found') || msg.includes('no longer available') || msg.includes('not supported') || data.error.code === 404) {
-            tryModel(modelIndex + 1);
-            return;
-          }
-        }
-        }
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      aiRemoveTyping(typingId);
+      isLoading = false;
+      if (sendBtn) sendBtn.disabled = false;
 
-        aiRemoveTyping(typingId);
-        isLoading = false;
-        if (sendBtn) sendBtn.disabled = false;
-        checkApiKey();
+      if (data.error) {
+        aiAppendMsg('bot', '❌ Greška: ' + (data.error.message || JSON.stringify(data.error)));
+        return;
+      }
 
-        if (data.error) {
-          var errMsg = data.error.message || 'Greška API poziva';
-          if (data.error.code === 400 || data.error.code === 403) {
-            aiAppendMsg('bot', '❌ API greška: ' + errMsg + '\n\nProvjeri je li API ključ ispravan. Klikni 🔑 za promjenu ključa.');
-          } else {
-            aiAppendMsg('bot', '❌ Greška: ' + errMsg);
-          }
-          return;
-        }
+      var reply = '';
+      try {
+        reply = data.choices[0].message.content;
+      } catch (e) {
+        reply = '⚠️ Neočekivani format odgovora.';
+      }
 
-        var reply = '';
-        try {
-          reply = data.candidates[0].content.parts[0].text;
-        } catch (e) {
-          reply = '⚠️ Neočekivani format odgovora.';
-        }
-
-        // Ažuriraj status s modelom koji je uspio
-        var statusEl = document.getElementById('ai-chat-status');
-        if (statusEl) statusEl.textContent = modelName + ' • Mjerenje plinova';
-
-        chatHistory.push({ role: 'model', text: reply });
-        aiAppendMsg('bot', reply);
-      })
-      .catch(function (err) {
-        aiRemoveTyping(typingId);
-        isLoading = false;
-        if (sendBtn) sendBtn.disabled = false;
-        checkApiKey();
-        aiAppendMsg('bot', '❌ Mrežna greška: ' + err.message + '\n\nProvjeri internet vezu.');
-      });
-    }
-
-    tryModel(0);
+      chatHistory.push({ role: 'model', text: reply });
+      aiAppendMsg('bot', reply);
+    })
+    .catch(function (err) {
+      aiRemoveTyping(typingId);
+      isLoading = false;
+      if (sendBtn) sendBtn.disabled = false;
+      aiAppendMsg('bot', '❌ Mrežna greška: ' + err.message);
+    });
   }
+
 
   // ─── DOM helpers ──────────────────────────────────────────────────────────
   function aiAppendMsg(role, text) {
