@@ -9,10 +9,10 @@
   // Fallback lista modela - pokušava redom dok ne uspije
   var GEMINI_MODELS = [
     'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-001'
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash'
   ];
-  var GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1/models/';
+  var GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
   var GEMINI_ENDPOINT = GEMINI_BASE + GEMINI_MODELS[0] + ':generateContent?key=';
 
   var SYSTEM_PROMPT = `Ti si AI asistent specijaliziran za mjerenje odlagališnih plinova. 
