@@ -656,9 +656,13 @@ body.dark #ai-no-key-warning {
       .then(function (res) { return res.json(); })
       .then(function (data) {
         // Ako model nije dostupan, pokušaj sljedeći
-        if (data.error && (data.error.message || '').toLowerCase().includes('no longer available') && modelIndex + 1 < GEMINI_MODELS.length) {
-          tryModel(modelIndex + 1);
-          return;
+        if (data.error && modelIndex + 1 < GEMINI_MODELS.length) {
+          var msg = (data.error.message || '').toLowerCase();
+          if (msg.includes('not found') || msg.includes('no longer available') || msg.includes('not supported') || data.error.code === 404) {
+            tryModel(modelIndex + 1);
+            return;
+          }
+        }
         }
 
         aiRemoveTyping(typingId);
