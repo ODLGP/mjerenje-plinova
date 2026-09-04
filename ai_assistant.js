@@ -609,21 +609,13 @@ body.dark #ai-no-key-warning {
     messages.push({ role: 'user', content: contextBlock + userText });
     chatHistory.push({ role: 'user', text: userText });
 
-    // Pozovi API bez ključa - Pollinations text format
-    fetch(AI_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: messages,
-        model: AI_MODEL,
-        seed: -1,
-        private: true
-      })
-    })
-    .then(function (res) {
-      // Pollinations vraća plain text, ne JSON
-      return res.text();
-    })
+    // Pozovi Pollinations API - GET format
+    // Složi prompt od system + zadnja poruka (URL limit)
+    var fullPrompt = SYSTEM_PROMPT + '\n\n' + contextBlock + userText;
+    var promptUrl = 'https://text.pollinations.ai/' + encodeURIComponent(fullPrompt) + '?model=' + AI_MODEL + '&private=true';
+
+    fetch(promptUrl)
+    .then(function (res) { return res.text(); })
     .then(function (text) {
       aiRemoveTyping(typingId);
       isLoading = false;
@@ -634,14 +626,6 @@ body.dark #ai-no-key-warning {
         return;
       }
 
-      // Provjeri je li greška
-      var maybeJson = null;
-      try { maybeJson = JSON.parse(text); } catch(e) {}
-      if (maybeJson && maybeJson.error) {
-        aiAppendMsg('bot', '❌ Greška: ' + (maybeJson.error.message || JSON.stringify(maybeJson.error)));
-        return;
-      }
-
       chatHistory.push({ role: 'model', text: text });
       aiAppendMsg('bot', text);
     })
@@ -649,7 +633,7 @@ body.dark #ai-no-key-warning {
       aiRemoveTyping(typingId);
       isLoading = false;
       if (sendBtn) sendBtn.disabled = false;
-      aiAppendMsg('bot', '❌ Mrežna greška: ' + err.message);
+      aiAppendMsg('bot', '❌ Greška: ' + err.message);
     });
   }
 
