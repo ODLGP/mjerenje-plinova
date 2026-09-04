@@ -6,8 +6,8 @@
 
   // ─── Konstante ────────────────────────────────────────────────────────────
   var LS_API_KEY = 'mop_openrouter_api_key';
-  var AI_ENDPOINT = 'https://text.pollinations.ai/openai';
-  var AI_MODEL = 'openai'; // besplatan, bez ključa
+  var AI_ENDPOINT = 'https://text.pollinations.ai/';
+  var AI_MODEL = 'mistral'; // besplatan, bez ključa
 
   var SYSTEM_PROMPT = `Ti si AI asistent specijaliziran za mjerenje odlagališnih plinova. 
 Radiš unutar mobilne terenske aplikacije MOP (Mjerenje Odlagališnih Plinova) tvrtke Dvokut.
@@ -609,38 +609,41 @@ body.dark #ai-no-key-warning {
     messages.push({ role: 'user', content: contextBlock + userText });
     chatHistory.push({ role: 'user', text: userText });
 
-    // Pozovi API bez ključa
+    // Pozovi API bez ključa - Pollinations text format
     fetch(AI_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: AI_MODEL,
         messages: messages,
-        temperature: 0.7,
-        max_tokens: 1024,
+        model: AI_MODEL,
+        seed: -1,
         private: true
       })
     })
-    .then(function (res) { return res.json(); })
-    .then(function (data) {
+    .then(function (res) {
+      // Pollinations vraća plain text, ne JSON
+      return res.text();
+    })
+    .then(function (text) {
       aiRemoveTyping(typingId);
       isLoading = false;
       if (sendBtn) sendBtn.disabled = false;
 
-      if (data.error) {
-        aiAppendMsg('bot', '❌ Greška: ' + (data.error.message || JSON.stringify(data.error)));
+      if (!text || text.trim() === '') {
+        aiAppendMsg('bot', '⚠️ Prazan odgovor. Pokušaj ponovo.');
         return;
       }
 
-      var reply = '';
-      try {
-        reply = data.choices[0].message.content;
-      } catch (e) {
-        reply = '⚠️ Neočekivani format odgovora.';
+      // Provjeri je li greška
+      var maybeJson = null;
+      try { maybeJson = JSON.parse(text); } catch(e) {}
+      if (maybeJson && maybeJson.error) {
+        aiAppendMsg('bot', '❌ Greška: ' + (maybeJson.error.message || JSON.stringify(maybeJson.error)));
+        return;
       }
 
-      chatHistory.push({ role: 'model', text: reply });
-      aiAppendMsg('bot', reply);
+      chatHistory.push({ role: 'model', text: text });
+      aiAppendMsg('bot', text);
     })
     .catch(function (err) {
       aiRemoveTyping(typingId);
