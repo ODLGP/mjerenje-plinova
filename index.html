@@ -1856,6 +1856,11 @@ function initLandfillGrid() {
         document.querySelectorAll('.landfill-card').forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
         state.selectedLandfill = landfill;
+        // Scroll do gumba Nastavi
+        setTimeout(function() {
+          var btn = document.getElementById('template-landfill-next');
+          if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
       });
       grid.appendChild(card);
     });
