@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MOP — Pregled backup mjerenja</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f0f4f8;
+    color: #1a1a2e;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  header {
+    background: linear-gradient(135deg, #1a237e, #283593);
+    color: white;
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 { font-size: 20px; font-weight: 700; }
+  header p  { font-size: 13px; opacity: 0.8; margin-top: 3px; }
+
+  .drop-zone {
+    border: 2px dashed #3949ab;
+    border-radius: 14px;
+    background: white;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 24px;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    background: #e8eaf6;
+    border-color: #1a237e;
+  }
+  .drop-zone .icon { font-size: 48px; margin-bottom: 12px; }
+  .drop-zone h2   { font-size: 17px; color: #1a237e; margin-bottom: 6px; }
+  .drop-zone p    { font-size: 13px; color: #666; }
+  .drop-zone input { display: none; }
+
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: white;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    border-top: 3px solid #3949ab;
+  }
+  .stat-card .val  { font-size: 26px; font-weight: 700; color: #1a237e; }
+  .stat-card .lbl  { font-size: 12px; color: #888; margin-top: 3px; }
+
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .toolbar input[type=text] {
+    flex: 1;
+    min-width: 180px;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .toolbar select {
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+  }
+
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  button:hover { opacity: 0.85; }
+  .btn-primary  { background: #1a237e; color: white; }
+  .btn-green    { background: #2e7d32; color: white; }
+  .btn-orange   { background: #e65100; color: white; }
+  .btn-gray     { background: #6c757d; color: white; }
+
+  .measurements-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .meas-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+  }
+  .meas-header {
+    background: linear-gradient(135deg, #2e7d32, #4caf50);
+    color: white;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .meas-header h3  { font-size: 15px; font-weight: 700; }
+  .meas-header .meta { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+  .meas-header .actions { display: flex; gap: 6px; }
+  .meas-header .actions button {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.2);
+    color: white;
+    font-weight: 600;
+  }
+
+  .meas-body {
+    display: none;
+    padding: 14px 16px;
+    overflow-x: auto;
+  }
+  .meas-body.open { display: block; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 560px;
+  }
+  th {
+    background: #1a237e;
+    color: white;
+    padding: 8px 10px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  td {
+    padding: 7px 10px;
+    text-align: center;
+    border-bottom: 1px solid #f0f0f0;
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #f8f9ff; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-ok      { background: #e8f5e9; color: #2e7d32; }
+  .badge-warn    { background: #fff3e0; color: #e65100; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #aaa;
+    display: none;
+  }
+  .empty-state .icon { font-size: 56px; margin-bottom: 12px; }
+  .empty-state h2    { font-size: 18px; color: #bbb; margin-bottom: 6px; }
+
+  #no-data { display: block; }
+
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    .meas-header { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>♻️ MOP — Pregled backup mjerenja</h1>
+    <p>Učitaj JSON backup datoteke i preuzmi Excel za svako mjerenje</p>
+  </div>
+  <a href="index.html" style="color:rgba(255,255,255,0.8);font-size:13px;text-decoration:none;">← Povratak na aplikaciju</a>
+</header>
+
+<!-- DROP ZONA -->
+<div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+  <div class="icon">📂</div>
+  <h2>Učitaj JSON backup datoteke</h2>
+  <p>Klikni ili povuci .json datoteke ovdje<br>Možeš učitati više datoteka odjednom</p>
+  <input type="file" id="file-input" accept=".json" multiple>
+</div>
+
+<!-- STATISTIKE -->
+<div class="stats-bar" id="stats-bar" style="display:none;">
+  <div class="stat-card">
+    <div class="val" id="stat-files">0</div>
+    <div class="lbl">Učitanih datoteka</div>
+  </div>
+  <div class="stat-card">
+    <div class="val" id="stat-total">0</div>
+    <div class="lbl">Ukupno mjerenja</div>
+  </div>
+  <div class="stat-card">
+    <div class="val" id="stat-locations">0</div>
+    <div class="lbl">Lokacija</div>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar" id="toolbar" style="display:none;">
+  <input type="text" id="search-input" placeholder="🔍 Pretraži odlagalište, mjeritelja..." oninput="renderList()">
+  <select id="sort-select" onchange="renderList()">
+    <option value="date-desc">Datum: najnovije</option>
+    <option value="date-asc">Datum: najstarije</option>
+    <option value="name-asc">Lokacija A→Z</option>
+  </select>
+  <button class="btn-green" onclick="exportAllToExcel()">📦 Excel — sva mjerenja</button>
+  <button class="btn-gray" onclick="clearAll()">🗑️ Očisti</button>
+</div>
+
+<!-- LISTA MJERENJA -->
+<div class="measurements-grid" id="measurements-grid"></div>
+
+<!-- EMPTY STATE -->
+<div class="empty-state" id="no-data">
+  <div class="icon">📋</div>
+  <h2>Nema učitanih podataka</h2>
+  <p>Učitaj JSON backup datoteke gore</p>
+</div>
+
+<script>
+  var allMeasurements = [];
+
+  // ── Drag & drop ──
+  var dz = document.getElementById('drop-zone');
+  dz.addEventListener('dragover',  function(e){ e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', function()  { dz.classList.remove('drag-over'); });
+  dz.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    loadFiles(Array.from(e.dataTransfer.files));
+  });
+  document.getElementById('file-input').addEventListener('change', function(e) {
+    loadFiles(Array.from(e.target.files));
+  });
+
+  // ── Učitavanje JSON fajlova ──
+  function loadFiles(files) {
+    var jsonFiles = files.filter(function(f){ return f.name.endsWith('.json'); });
+    if (jsonFiles.length === 0) { alert('Odaberi .json backup datoteke.'); return; }
+    var pending = jsonFiles.length;
+    jsonFiles.forEach(function(file) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var data = JSON.parse(e.target.result);
+          var list = data.mjerenja || data.list || (Array.isArray(data) ? data : []);
+          list.forEach(function(m) {
+            // Izbjegni duplikate po datumu + lokacija + mjeritelj
+            var dup = allMeasurements.some(function(x) {
+              return x.date === m.date &&
+                     (x.landfill && m.landfill && x.landfill.name === m.landfill.name) &&
+                     x.measurer === m.measurer;
+            });
+            if (!dup) allMeasurements.push(m);
+          });
+        } catch(err) {
+          alert('Greška u datoteci ' + file.name + ': ' + err.message);
+        }
+        pending--;
+        if (pending === 0) {
+          updateStats();
+          renderList();
+        }
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  // ── Statistike ──
+  function updateStats() {
+    var hasData = allMeasurements.length > 0;
+    document.getElementById('stats-bar').style.display = hasData ? 'grid' : 'none';
+    document.getElementById('toolbar').style.display   = hasData ? 'flex' : 'none';
+    document.getElementById('no-data').style.display   = hasData ? 'none' : 'block';
+
+    var totalVents = allMeasurements.reduce(function(s, m){ return s + (m.vents ? m.vents.length : 0); }, 0);
+    var locations  = new Set(allMeasurements.map(function(m){ return m.landfill && m.landfill.name; }));
+
+    document.getElementById('stat-files').textContent     = document.querySelectorAll('#file-input').length || '—';
+    document.getElementById('stat-total').textContent     = allMeasurements.length;
+    document.getElementById('stat-locations').textContent = locations.size;
+  }
+
+  // ── Renderiranje liste ──
+  function renderList() {
+    var q    = (document.getElementById('search-input').value || '').toLowerCase();
+    var sort = document.getElementById('sort-select').value;
+
+    var list = allMeasurements.filter(function(m) {
+      var name = (m.landfill && m.landfill.name || '').toLowerCase();
+      var meas = (m.measurer || '').toLowerCase();
+      return !q || name.includes(q) || meas.includes(q);
+    });
+
+    list.sort(function(a, b) {
+      if (sort === 'date-desc') return (b.date || '').localeCompare(a.date || '');
+      if (sort === 'date-asc')  return (a.date || '').localeCompare(b.date || '');
+      if (sort === 'name-asc')  return (a.landfill && a.landfill.name || '').localeCompare(b.landfill && b.landfill.name || '');
+      return 0;
+    });
+
+    var grid = document.getElementById('measurements-grid');
+    grid.innerHTML = '';
+
+    if (list.length === 0) {
+      grid.innerHTML = '<p style="text-align:center;color:#aaa;padding:20px;">Nema rezultata.</p>';
+      return;
+    }
+
+    list.forEach(function(m, i) {
+      var realIdx = allMeasurements.indexOf(m);
+      var card    = document.createElement('div');
+      card.className = 'meas-card';
+
+      var ventCount = m.vents ? m.vents.length : 0;
+      var time = (m.startTime || '') + (m.endTime ? ' – ' + m.endTime : '');
+
+      card.innerHTML =
+        '<div class="meas-header" onclick="toggleCard(' + realIdx + ')">' +
+          '<div>' +
+            '<h3>' + (m.landfill && m.landfill.name || 'Nepoznato') + '</h3>' +
+            '<div class="meta">' +
+              '📅 ' + (m.date || '—') +
+              (time ? '  ·  ⏰ ' + time : '') +
+              '  ·  👤 ' + (m.measurer || '—') +
+              '  ·  📟 ' + (m.device || '—') +
+              '  ·  💨 ' + ventCount + ' odušnika' +
+            '</div>' +
+          '</div>' +
+          '<div class="actions" onclick="event.stopPropagation()">' +
+            '<button onclick="exportSingleExcel(' + realIdx + ')">💾 Excel</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="meas-body" id="body-' + realIdx + '">' +
+          buildVentTable(m) +
+        '</div>';
+
+      grid.appendChild(card);
+    });
+  }
+
+  // ── Toggle detalji ──
+  window.toggleCard = function(idx) {
+    var body = document.getElementById('body-' + idx);
+    if (body) body.classList.toggle('open');
+  };
+
+  // ── Tablica odušnika ──
+  function buildVentTable(m) {
+    if (!m.vents || m.vents.length === 0) {
+      return '<p style="color:#aaa;padding:10px;text-align:center;">Nema odušnika.</p>';
+    }
+    var html = '<table>' +
+      '<thead><tr>' +
+        '<th>Odušnik</th>' +
+        '<th>CH₄ [%]</th>' +
+        '<th>CO₂ [%]</th>' +
+        '<th>O₂ [%]</th>' +
+        '<th>H₂ [ppm]</th>' +
+        '<th>H₂S [ppm]</th>' +
+        '<th>Temp [°C]</th>' +
+        '<th>Status</th>' +
+        '<th>Napomena</th>' +
+      '</tr></thead><tbody>';
+
+    m.vents.forEach(function(v) {
+      var measured = v.status === 'measured';
+      html += '<tr>' +
+        '<td><strong>' + (v.name || '—') + '</strong></td>' +
+        '<td>' + (v.ch4  || '—') + '</td>' +
+        '<td>' + (v.co2  || '—') + '</td>' +
+        '<td>' + (v.o2   || '—') + '</td>' +
+        '<td>' + (v.h2   || '—') + '</td>' +
+        '<td>' + (v.h2s  || '—') + '</td>' +
+        '<td>' + (v.temp || '—') + '</td>' +
+        '<td><span class="badge ' + (measured ? 'badge-ok' : 'badge-warn') + '">' +
+          (measured ? 'Izmjeren' : 'Nije izmjereno') +
+        '</span></td>' +
+        '<td>' + (v.note || '') + '</td>' +
+      '</tr>';
+    });
+
+    html += '</tbody></table>';
+    return html;
+  }
+
+  // ── Excel export - jedno mjerenje ──
+  window.exportSingleExcel = function(idx) {
+    var m = allMeasurements[idx];
+    if (!m) return;
+    exportMeasurementToExcel(m);
+  };
+
+  function exportMeasurementToExcel(m) {
+    var vrijemePocetka  = m.startTime || 'Nije upisano';
+    var vrijemeZavrsetka = m.endTime  || 'Nije upisano';
+
+    var aoa = [
+      ['IZVJEŠTAJ O MJERENJU ODLAGALIŠNIH PLINOVA', '', '', '', '', '', '', '', '', ''],
+      ['Obrazac ZM-05-G', '', '', '', '', '', '', '', ''],
+      ['', '', '', '', '', '', '', '', '', ''],
+      ['Lokacija i naziv odlagališta:', m.landfill && m.landfill.name || '', '', '', '', 'Datum:', m.date || '', '', ''],
+      ['', '', '', '', '', '', '', '', '', ''],
+      ['Mjeritelj:', m.measurer || '', '', '', '', 'Korišteni uređaj:', m.device || '', '', ''],
+      ['', '', '', '', '', '', '', '', '', ''],
+      ['Temperatura zraka [°C]:', m.airTemp || '', '', 'Smjer vjetra:', m.windDirection || '', ''],
+      ['Tlak zraka [hPa]:', m.airPressure || '', '', 'Brzina vjetra [m/s]:', m.windSpeed || '', '', 'Početak mjerenja:', vrijemePocetka],
+      ['', '', '', '', '', '', '', '', '', ''],
+      ['Odušak', 'CH4 [%]', 'CO2 [%]', 'O2 [%]', 'H2 [ppm]', 'H2S [ppm]', 'Temperatura', 'Status', 'Napomena']
+    ];
+
+    (m.vents || []).forEach(function(vent) {
+      aoa.push([
+        vent.name   || '',
+        vent.ch4    || '',
+        vent.co2    || '',
+        vent.o2     || '',
+        vent.h2     || '',
+        vent.h2s    || '',
+        vent.temp   || '',
+        vent.status === 'measured' ? 'Izmjeren' : 'Ne može se izmjeriti',
+        vent.note   || ''
+      ]);
+    });
+
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Mjerenje');
+
+    var safeName = (m.landfill && m.landfill.name || 'Mjerenje').replace(/[^a-zA-Z0-9]/g, '_');
+    var filename = 'Mjerenje_' + (m.date || '').replace(/-/g, '_') + '_' + safeName + '.xlsx';
+    XLSX.writeFile(wb, filename);
+  }
+
+  // ── Excel export - sva mjerenja (jedan sheet po mjerenju) ──
+  function exportAllToExcel() {
+    if (allMeasurements.length === 0) { alert('Nema mjerenja za export.'); return; }
+
+    var wb = XLSX.utils.book_new();
+
+    allMeasurements.forEach(function(m, i) {
+      var vrijemePocetka   = m.startTime || 'Nije upisano';
+      var vrijemeZavrsetka = m.endTime   || 'Nije upisano';
+
+      var aoa = [
+        ['IZVJEŠTAJ O MJERENJU ODLAGALIŠNIH PLINOVA', '', '', '', '', '', '', '', '', ''],
+        ['Lokacija:', m.landfill && m.landfill.name || '', '', 'Datum:', m.date || '', '', 'Mjeritelj:', m.measurer || ''],
+        ['Uređaj:', m.device || '', '', 'Početak:', vrijemePocetka, '', 'Kraj:', vrijemeZavrsetka],
+        [''],
+        ['Odušak', 'CH4 [%]', 'CO2 [%]', 'O2 [%]', 'H2 [ppm]', 'H2S [ppm]', 'Temperatura', 'Status', 'Napomena']
+      ];
+
+      (m.vents || []).forEach(function(vent) {
+        aoa.push([
+          vent.name || '',
+          vent.ch4  || '',
+          vent.co2  || '',
+          vent.o2   || '',
+          vent.h2   || '',
+          vent.h2s  || '',
+          vent.temp || '',
+          vent.status === 'measured' ? 'Izmjeren' : 'Ne može se izmjeriti',
+          vent.note || ''
+        ]);
+      });
+
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      // Naziv sheeta: datum + kratica lokacije (max 31 znak)
+      var sheetName = ((m.date || '').replace(/-/g, '') + '_' + (m.landfill && m.landfill.name || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 15)).slice(0, 31);
+      if (!sheetName) sheetName = 'Mjerenje_' + (i + 1);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+
+    var now      = new Date();
+    var filename = 'MOP_Backup_' + now.toISOString().slice(0, 10) + '.xlsx';
+    XLSX.writeFile(wb, filename);
+  }
+
+  // ── Očisti ──
+  function clearAll() {
+    if (!confirm('Obrisati sve učitane podatke?')) return;
+    allMeasurements = [];
+    document.getElementById('measurements-grid').innerHTML = '';
+    document.getElementById('stats-bar').style.display = 'none';
+    document.getElementById('toolbar').style.display   = 'none';
+    document.getElementById('no-data').style.display   = 'block';
+    document.getElementById('search-input').value      = '';
+    // Reset file input potpuno
+    var fi = document.getElementById('file-input');
+    fi.value = '';
+    // Kloniranjem resetiramo input da browser dopusti isti fajl ponovo
+    var newFi = fi.cloneNode(true);
+    newFi.addEventListener('change', function(e) {
+      loadFiles(Array.from(e.target.files));
+    });
+    fi.parentNode.replaceChild(newFi, fi);
+  }
+</script>
+</body>
+</html>
