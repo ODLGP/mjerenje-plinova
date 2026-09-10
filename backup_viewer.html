@@ -182,6 +182,78 @@
   .badge-ok      { background: #e8f5e9; color: #2e7d32; }
   .badge-warn    { background: #fff3e0; color: #e65100; }
 
+  /* Map modal */
+  .map-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 9000;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .map-modal-overlay.open { display: flex; }
+  .map-modal-box {
+    background: #1a1a2e;
+    border-radius: 14px;
+    padding: 0;
+    max-width: 860px;
+    width: 100%;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+  .map-modal-header {
+    background: linear-gradient(135deg,#1a237e,#283593);
+    color: white;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .map-modal-header h3 { font-size: 15px; font-weight: 700; }
+  .map-modal-header span { font-size: 12px; opacity: 0.8; }
+  .map-modal-close {
+    background: none; border: none; color: white;
+    font-size: 24px; cursor: pointer; line-height: 1; padding: 0;
+  }
+  .map-canvas-wrap {
+    position: relative;
+    display: block;
+    width: 100%;
+  }
+  .map-canvas-wrap img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .map-canvas-wrap canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  /* CH4 legenda */
+  .ch4-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #111;
+    flex-wrap: wrap;
+  }
+  .ch4-legend-bar {
+    flex: 1;
+    min-width: 120px;
+    height: 16px;
+    border-radius: 4px;
+    background: linear-gradient(to right,
+      #ffffff, #c8e6c9, #66bb6a, #a5d6a7,
+      #ffee58, #ffa726, #ef5350, #b71c1c, #000000);
+  }
+  .ch4-legend span { color: #ccc; font-size: 12px; white-space: nowrap; }
+
   .empty-state {
     text-align: center;
     padding: 60px 20px;
@@ -253,6 +325,23 @@
   <div class="icon">📋</div>
   <h2>Nema učitanih podataka</h2>
   <p>Učitaj JSON backup datoteke gore</p>
+</div>
+
+<!-- MAP MODAL -->
+<div class="map-modal-overlay" id="map-modal">
+  <div class="map-modal-box">
+    <div class="map-modal-header">
+      <div>
+        <h3 id="map-modal-title"></h3>
+        <span id="map-modal-sub"></span>
+      </div>
+      <button class="map-modal-close" onclick="closeMapModal()">✕</button>
+    </div>
+    <div class="map-canvas-wrap" id="map-canvas-wrap">
+      <img id="map-modal-img" src="" alt="Karta odlagališta" onload="drawVentMarkers()">
+      <canvas id="map-canvas"></canvas>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -366,6 +455,7 @@
             '</div>' +
           '</div>' +
           '<div class="actions" onclick="event.stopPropagation()">' +
+            '<button onclick="openMapModal(' + realIdx + ')" style="background:#4a148c;">🗺️ Prikaz</button>' +
             '<button onclick="exportSingleExcel(' + realIdx + ')">💾 Excel</button>' +
           '</div>' +
         '</div>' +
@@ -383,7 +473,7 @@
     if (body) body.classList.toggle('open');
   };
 
-  // ── Tablica odušnika ──
+  // ── Dodaj gumb "Prikaz" u header kartice ──
   function buildVentTable(m) {
     if (!m.vents || m.vents.length === 0) {
       return '<p style="color:#aaa;padding:10px;text-align:center;">Nema odušnika.</p>';
@@ -513,6 +603,291 @@
     var filename = 'MOP_Backup_' + now.toISOString().slice(0, 10) + '.xlsx';
     XLSX.writeFile(wb, filename);
   }
+
+  // ── MAP MODAL ──────────────────────────────────────────────────────────────
+
+  // Slike odlagališta (relativni putevi od backup_viewer.html)
+  var LANDFILL_DATA = {
+    'Odlagalište otpada Križevci':              { id: 1,  img: 'slike/odlagalista/Krizevci.jpg' },
+    'Odlagalište otpada Koprivnica':            { id: 2,  img: 'slike/odlagalista/Koprivnica.jpg' },
+    'Odlagalište otpada Virovitica':            { id: 3,  img: 'slike/odlagalista/Virovitica.jpg' },
+    'Odlagalište otpada Grubišno Polje':        { id: 4,  img: 'slike/odlagalista/Grubisno-Polje.jpg' },
+    'Odlagalište otpada Belišće':               { id: 5,  img: 'slike/odlagalista/Belisce.jpg' },
+    'Odlagalište otpada Beli Manastir':         { id: 6,  img: 'slike/odlagalista/Beli-Manastir.jpg' },
+    'Odlagalište otpada Pag':                   { id: 7,  img: 'slike/odlagalista/Pag.jpg' },
+    'Odlagalište otpada Otočac':                { id: 8,  img: 'slike/odlagalista/Otocac.jpg' },
+    'Odlagalište otpada Zadar - Diklo':         { id: 9,  img: 'slike/odlagalista/Zadar.jpg' },
+    'Odlagalište otpada Split - Karepovac':     { id: 10, img: 'slike/odlagalista/Karepovac.jpg' },
+    'Odlagalište otpada Knin - Mala Promina':   { id: 11, img: 'slike/odlagalista/Knin.jpg' },
+    'Odlagalište otpada Kljakovača - Obrovac':  { id: 12, img: 'slike/odlagalista/Obrovac.jpg' },
+    'Odlagalište otpada Cere - Labin':          { id: 13, img: 'slike/odlagalista/Labin.jpg' },
+    'Odlagalište otpada Novi Dvori - Zaprešić': { id: 14, img: 'slike/odlagalista/Zapresic.jpg' },
+    'Odlagalište otpada Griža - Buzet':         { id: 15, img: 'slike/odlagalista/Griza.jpg' },
+    'Odlagalište otpada Pržić - Cres':          { id: 16, img: 'slike/odlagalista/Cres.jpg' },
+    'Odlagalište otpada Bedekovčina':           { id: 17, img: 'slike/odlagalista/Bedekovcina.jpg' },
+    'Odlagalište otpada Basilica - Rovinj':     { id: 18, img: 'slike/odlagalista/Rovinj.jpg' },
+    'Odlagalište otpada Jelenčići V - Pazin':   { id: 19, img: 'slike/odlagalista/Pazin.jpg' },
+    'Odlagalište otpada Biljane Donje':         { id: 20, img: 'slike/odlagalista/Biljane-Donje.jpg' }
+  };
+
+  // Koordinate odušnika (x%, y%) - kopirane iz index.html
+  var VENT_COORDINATES = {
+    1: {"1":{x:20.1,y:81.1},"2":{x:27.1,y:81},"3":{x:35.5,y:81},"4":{x:42.7,y:80.6},"5":{x:49.8,y:80.6},"6":{x:50.2,y:75.1},"7":{x:43.6,y:76.3},"8":{x:35,y:74.9},"9":{x:26.7,y:76.6},"10":{x:20.6,y:73.4},"11":{x:47,y:65.8},"12":{x:45.4,y:62.8},"13":{x:35.6,y:72.7},"14":{x:43.8,y:60.3},"15":{x:40.2,y:57.2},"16":{x:35.5,y:54.6},"17":{x:44.6,y:41},"18":{x:44.1,y:29.5},"19":{x:43.2,y:23.7},"20":{x:32.9,y:27.3},"21":{x:32.7,y:35.6}},
+    2: {"A1":{x:4.1,y:72.5},"A2":{x:8,y:79.7},"A4":{x:23.5,y:35.4},"A6":{x:94.1,y:36},"A7":{x:88.6,y:47.9},"A8":{x:80.8,y:57.9},"B3":{x:9.2,y:35.9},"B5":{x:85.4,y:13.4},"Z1":{x:68.5,y:35.2},"Z2":{x:69,y:37.8},"Z3":{x:63,y:37.7},"Z4":{x:57.5,y:37.8},"Z5":{x:64.6,y:35.8},"Z6":{x:7.1,y:64.9},"Z7":{x:6.7,y:75.5},"Z8":{x:14.4,y:67.5},"Z9":{x:14.3,y:73.7},"Z10":{x:23.1,y:66.2},"Z11":{x:23.5,y:74.2},"Z12":{x:30,y:66.4},"Z13":{x:30.1,y:74.3},"Z14":{x:43.5,y:65.3},"Z15":{x:42.2,y:75.3},"Z16":{x:49.4,y:65.3},"Z17":{x:48.1,y:74.6},"Z18":{x:56.6,y:65.3},"Z19":{x:56.7,y:73.3}},
+    3: {"1-3":{x:61.8,y:36},"2-2":{x:49.2,y:39.7},"2-3":{x:57.6,y:43.8},"2-4":{x:65.6,y:48.3},"3-2":{x:46.9,y:49},"3-3":{x:53.7,y:51.9},"3-4":{x:59.5,y:56.9},"4-2":{x:41.4,y:56.2},"4-3":{x:48.9,y:60.6},"4-4":{x:54.3,y:63.3},"5-2":{x:39.8,y:64.4},"5-3":{x:44.1,y:68.1},"5-4":{x:51.9,y:70.1},"6-2":{x:33.6,y:71.6},"6-3":{x:39.7,y:75.8},"6-4":{x:45.1,y:78.1},"10-1":{x:20.6,y:59.3},"10-2":{x:23.2,y:54.8},"10-3":{x:26.1,y:50.3},"10-4":{x:28.3,y:45.3},"10-5":{x:31.2,y:41.1},"9-1":{x:15.6,y:56.4},"9-2":{x:17.8,y:51.3},"9-3":{x:20.9,y:47.4},"9-4":{x:23.5,y:42.3},"9-5":{x:25.9,y:37.4},"8-1":{x:10.4,y:53.9},"8-2":{x:13,y:49.1},"8-3":{x:16,y:44.6},"8-4":{x:18.5,y:40.3},"8-5":{x:21.7,y:35.5}},
+    4: {"N1":{x:47.9,y:55.1},"N2":{x:41.3,y:54.9},"N3":{x:40,y:64},"N4":{x:48.3,y:64}},
+    5: {"10":{x:57.5,y:41.6},"11":{x:79.6,y:39.8},"12":{x:71.7,y:44.7},"13":{x:61,y:47.9},"14":{x:51.3,y:52.9},"15":{x:41.7,y:56.7},"16":{x:30.1,y:62.9},"17":{x:33.5,y:70.5},"18":{x:43.1,y:66.1},"19":{x:55.2,y:61.3},"20":{x:66.3,y:57.9},"21":{x:76.7,y:54.5},"22":{x:84,y:49.7},"23":{x:89.1,y:69},"24":{x:92.1,y:76.4},"25":{x:79.6,y:68},"26":{x:84.8,y:79},"27":{x:70.7,y:72.3},"28":{x:75.9,y:81.1},"29":{x:61.3,y:77},"30":{x:67.4,y:87.5},"31":{x:52.7,y:82.9},"32":{x:57.6,y:93.7},"33":{x:42,y:86.7},"34":{x:46.6,y:97.1},"01":{x:53.5,y:31.3},"02":{x:46.6,y:35},"03":{x:38.8,y:38.9},"04":{x:30.9,y:42},"05":{x:21.4,y:46.1},"06":{x:26.1,y:55.2},"07":{x:34.4,y:50.5},"08":{x:41.4,y:46.4},"09":{x:48.7,y:43.1}},
+    6: {"Z01":{x:14.2,y:42.2},"Z02":{x:21.7,y:37.7},"Z03":{x:32.9,y:33.9},"Z04":{x:46.6,y:28},"Z05":{x:19.7,y:52.3},"Z06":{x:26.6,y:52.5},"Z07":{x:36.4,y:45.6},"Z08":{x:50.9,y:38.4},"Z09":{x:65.2,y:34.4},"Z10":{x:24.5,y:63.1},"Z11":{x:33.5,y:61.8},"Z12":{x:42.2,y:51.7},"Z13":{x:54.9,y:48.3},"Z14":{x:69.2,y:42.9},"Z15":{x:30.7,y:79.7},"Z16":{x:41.9,y:73.4},"Z17":{x:52.7,y:69.4},"Z18":{x:66.2,y:63.2},"Z19":{x:76.7,y:57.4},"Z20":{x:67.7,y:73.1},"Z21":{x:80.2,y:67.4}},
+    7: {"1":{x:27.1,y:59.7},"2":{x:41.4,y:69.1},"6":{x:61.4,y:55.8},"7":{x:53.3,y:47.4},"8":{x:44.5,y:53.3},"9":{x:34.1,y:59.1},"10":{x:51.5,y:61.5}},
+    8: {"1":{x:60,y:73},"2":{x:70.9,y:68.9},"3":{x:71.4,y:61.7},"4":{x:63.6,y:63.8},"5":{x:55.8,y:59.4},"6":{x:55.5,y:54},"7":{x:50.6,y:46.6},"8":{x:46.5,y:52.2},"Z1":{x:37.9,y:51.6},"Z2":{x:41.1,y:43.8},"N01":{x:30.9,y:43.4},"N02":{x:24.8,y:41.7},"N03":{x:19.1,y:40.1},"N04":{x:17.4,y:46.8},"N05":{x:22.9,y:48},"N06":{x:28.9,y:50.4},"N07":{x:26,y:57.6},"N08":{x:19.7,y:57.3},"N09":{x:14.2,y:55.5},"N10":{x:12.2,y:62.8},"N11":{x:18.5,y:63.5}},
+    9: {"BC29":{x:46.3,y:97.9},"BC2":{x:42.3,y:90.2},"BC30":{x:25.1,y:92.6},"BC5":{x:15.4,y:89},"BC23":{x:73.3,y:66},"BC37":{x:48.4,y:76.2},"BC9":{x:56.3,y:69.2},"D2":{x:57.8,y:64.8},"BC4":{x:56.4,y:60.2},"BC28":{x:46.3,y:66},"BC32":{x:51,y:19},"BC33":{x:50,y:51.9},"BC10":{x:50.6,y:35.3},"BC15":{x:48.7,y:43.6},"BC16":{x:42,y:45.9},"BC14":{x:43.5,y:37.6},"BC17":{x:40.3,y:36.1},"BC34":{x:29.5,y:39.4},"BC35":{x:48.6,y:7.9},"BC36":{x:56.4,y:26.1},"BC13":{x:51.5,y:25.3},"BC18":{x:41,y:21.2},"BC19":{x:34.3,y:22.5},"BC11":{x:45.5,y:28},"BC12":{x:40.7,y:29.9},"BC38":{x:35,y:14.5},"BC20":{x:42.4,y:11.9},"BC21":{x:49.5,y:13.1},"BC22":{x:71.3,y:36.2}},
+    10: {"PB82":{x:39.6,y:85.2},"PB83":{x:33.9,y:76},"PB84":{x:30.9,y:68.8},"PB85":{x:28.6,y:60.4},"PB86":{x:27.7,y:52.6},"PB87":{x:29.2,y:43.9},"PB88":{x:32.9,y:36.3},"PB89":{x:37.1,y:29.9},"PB92":{x:46,y:83},"PB93":{x:42.6,y:74.9},"PB94":{x:42.9,y:67.1},"PB95":{x:43.4,y:58.7},"PB96":{x:43.9,y:50.7},"PB97":{x:45.7,y:42.4},"PB98":{x:47.5,y:34.5},"PB100":{x:55.6,y:22.2},"PB102":{x:51.5,y:74.5},"PB103":{x:51.5,y:62.9},"PB104":{x:54.9,y:53.5},"PB105":{x:57,y:41.3},"PB106":{x:58.8,y:31.5},"PB108":{x:63.3,y:72.4},"PB109":{x:62.5,y:58.3},"PB110":{x:66.9,y:49.2},"PB111":{x:69.1,y:38.7},"PB114":{x:73.5,y:66.9},"PB115":{x:74.1,y:56.7}},
+    11: {"1":{x:55.6,y:49.2},"2":{x:44.5,y:50.4},"3":{x:40.7,y:62.6},"4":{x:39.4,y:69.7},"5":{x:49.5,y:72.1}},
+    12: {"1":{x:58.5,y:67.8},"2":{x:50.9,y:83.2},"3":{x:44.5,y:68.9},"4":{x:32.7,y:74.1},"5":{x:40.8,y:60.2},"6":{x:28.7,y:55.8},"7":{x:30.4,y:46.1}},
+    13: {"1":{x:45.5,y:72.3},"2":{x:42,y:53.2},"3":{x:56.4,y:42.3},"4":{x:42,y:39.8},"5":{x:74.3,y:62.4}},
+    14: {"11":{x:19.6,y:58.7},"12":{x:22,y:58.4},"13":{x:29.5,y:57.3},"14":{x:37,y:56.6},"15":{x:44.3,y:55.5},"16":{x:20.5,y:67.2},"17":{x:26.1,y:63.8},"18":{x:34.1,y:63.2},"19":{x:41.1,y:61.8},"20":{x:20,y:74.5},"21":{x:26.9,y:72.4},"22":{x:33.2,y:70.3},"23":{x:39.3,y:69.1},"24":{x:45.7,y:68.1},"25":{x:24,y:80.7},"26":{x:31.5,y:79.9},"27":{x:39.1,y:78.9},"28":{x:46.8,y:77.7}},
+    15: {"1":{x:35.6,y:67},"2":{x:30.1,y:52.9},"3":{x:27.5,y:41.1},"4":{x:16.7,y:23.2},"5":{x:15.1,y:12.8},"6":{x:13.3,y:33.6},"7":{x:9.5,y:24.9}},
+    16: {"10":{x:89.5,y:36.7},"11":{x:45.7,y:39.3},"12":{x:46,y:62.6},"13":{x:60.4,y:50.4},"14":{x:73.9,y:39.9},"01":{x:53.3,y:30.7},"02":{x:41.1,y:28.3},"03":{x:24.9,y:33.4},"04":{x:27.8,y:43.2},"05":{x:22.5,y:69.7},"06":{x:35.2,y:80},"07":{x:55.8,y:76.9},"08":{x:71.5,y:67.2},"09":{x:84,y:56.6}},
+    17: {"1":{x:51.8,y:59.3},"2":{x:54.1,y:75.3}},
+    18: {"B-2":{x:1.7,y:63.3},"B-3":{x:16.8,y:43.5},"B-4":{x:50.3,y:42.7},"B-5":{x:19.4,y:65.3},"B-6":{x:42.2,y:77.7},"B-7":{x:48.7,y:58.3},"B-8":{x:81.7,y:62.6},"B-9":{x:73.5,y:76.5},"B-11":{x:70.7,y:63.9},"B-12":{x:64.9,y:76.6},"B-13":{x:49.8,y:65.9},"B-14":{x:42.8,y:60.7},"B-15":{x:31.9,y:65.6},"B-16":{x:31.6,y:72.9},"B-17":{x:58.1,y:66.3},"B-18":{x:41.7,y:72.9},"B-19":{x:52.4,y:78.1},"B-20":{x:33.2,y:51.5},"B-21":{x:19.7,y:74.2},"B-23":{x:34.1,y:43.9},"B-25":{x:61.1,y:59.6},"B-26":{x:24.6,y:71.5},"B-27":{x:13,y:61.4},"B-28":{x:22.5,y:54.5}},
+    19: {"10":{x:66.5,y:44.7},"11":{x:75.4,y:38.7},"12":{x:83.8,y:33.6},"13":{x:69.2,y:55.8},"14":{x:76.1,y:50.3},"15":{x:83.7,y:43.6},"16":{x:91.3,y:36.8},"01":{x:42.9,y:41.4},"02":{x:51.8,y:34},"03":{x:58.8,y:27.4},"04":{x:65.9,y:22.6},"05":{x:51.9,y:45.6},"06":{x:59.4,y:39.2},"07":{x:66.5,y:32.6},"08":{x:73.7,y:25.7},"09":{x:59.7,y:50.8},"1N":{x:41.2,y:79.8},"2N":{x:34.2,y:73.1},"3N":{x:29.1,y:73.8}},
+    20: {"Z01":{x:57.9,y:81.9},"Z02":{x:50.6,y:71.9},"Z03":{x:41.7,y:63.9},"Z04":{x:67.8,y:72},"Z05":{x:60.2,y:63.4},"Z06":{x:66.9,y:56}}
+  };
+
+  // CH₄ skala boja - fiksni raspon 0–80% za sva odlagališta
+  // Točke uzete s legende: 0.8, 2.4, 4.4, 6.4, 9.6, 12.8, 16.0, 20.0, 24.0, 32.0, 40.0, 48.0, 56.0, 64.0, 80.0
+  function ch4ToColor(ch4Pct) {
+    var stops = [
+      [0.0,  255, 255, 255],   // bijela
+      [0.8,  220, 240, 210],   // vrlo svjetlozelena
+      [2.4,  180, 225, 165],   // svjetlozelena
+      [4.4,  130, 200, 120],   // srednje zelena
+      [6.4,   76, 175,  80],   // zelena
+      [9.6,   46, 125,  50],   // tamnozelena
+      [12.8, 220, 230, 100],   // žutozelena
+      [16.0, 255, 235,  59],   // žuta
+      [20.0, 255, 193,  60],   // žutooranžna
+      [24.0, 255, 152,  50],   // narančasta
+      [32.0, 230, 100,  50],   // tamnonarančasta
+      [40.0, 210,  60,  50],   // crveno-narančasta
+      [48.0, 183,  28,  28],   // crvena
+      [56.0, 140,  20,  20],   // tamnocrvena
+      [64.0,  90,  15,  10],   // smeđecrvena
+      [80.0,   0,   0,   0]    // crna
+    ];
+    var pct = Math.max(0, Math.min(80, ch4Pct));
+    for (var i = 0; i < stops.length - 1; i++) {
+      var s0 = stops[i], s1 = stops[i + 1];
+      if (pct >= s0[0] && pct <= s1[0]) {
+        var t = (pct - s0[0]) / (s1[0] - s0[0]);
+        var r = Math.round(s0[1] + t * (s1[1] - s0[1]));
+        var g = Math.round(s0[2] + t * (s1[2] - s0[2]));
+        var b = Math.round(s0[3] + t * (s1[3] - s0[3]));
+        return 'rgb(' + r + ',' + g + ',' + b + ')';
+      }
+    }
+    return 'rgb(0,0,0)';
+  }
+
+  var _mapMeasurement = null;
+  // Pokušaj učitati custom koordinate iz localStorage (ako je backup_viewer otvoren iz iste domene)
+  var _customCoords = {};
+  try {
+    var _raw = localStorage.getItem('coordinates');
+    if (_raw) _customCoords = JSON.parse(_raw);
+  } catch(e) {}
+
+  // Spoji builtin + custom koordinate
+  function getCoords(landfillId) {
+    var builtin = VENT_COORDINATES[landfillId] || {};
+    var custom  = _customCoords[landfillId]   || {};
+    return Object.assign({}, builtin, custom);
+  }
+
+  window.openMapModal = function(idx) {
+    var m = allMeasurements[idx];
+    if (!m) return;
+    _mapMeasurement = m;
+
+    var name = m.landfill && m.landfill.name || '';
+    var ld   = LANDFILL_DATA[name];
+
+    document.getElementById('map-modal-title').textContent = name;
+    document.getElementById('map-modal-sub').textContent =
+      (m.date || '') + (m.measurer ? ' · ' + m.measurer : '');
+
+    if (!ld) {
+      alert('Nema podataka o karti za ovo odlagalište.');
+      return;
+    }
+
+    // Postavi sliku - onload će pozvati drawVentMarkers
+    var img = document.getElementById('map-modal-img');
+    img.src = ld.img;
+
+    document.getElementById('map-modal').classList.add('open');
+  };
+
+  window.closeMapModal = function() {
+    document.getElementById('map-modal').classList.remove('open');
+    _mapMeasurement = null;
+  };
+
+  document.getElementById('map-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeMapModal();
+  });
+
+  window.drawVentMarkers = function() {
+    var m = _mapMeasurement;
+    if (!m) return;
+
+    var name = m.landfill && m.landfill.name || '';
+    var ld   = LANDFILL_DATA[name];
+    if (!ld) return;
+
+    var coords = getCoords(ld.id);
+    if (!coords || Object.keys(coords).length === 0) return;
+
+    var img    = document.getElementById('map-modal-img');
+    var canvas = document.getElementById('map-canvas');
+    var wrap   = document.getElementById('map-canvas-wrap');
+
+    // Postavi canvas dimenzije na prirodne dimenzije slike
+    canvas.width  = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Fiksni raspon 0–80% za sva odlagališta
+    document.getElementById('ch4-min-lbl').textContent = '0%';
+    document.getElementById('ch4-max-lbl').textContent = '80%';
+
+    // Veličina kružića relativno na širinu slike
+    var r = Math.max(10, canvas.width * 0.018);
+
+    // Crtaj svaki odušnik koji ima koordinate
+    (m.vents || []).forEach(function(v) {
+      var c = coords[v.name];
+      if (!c) return;
+
+      var px = (c.x / 100) * canvas.width;
+      var py = (c.y / 100) * canvas.height;
+
+      var fillColor, strokeColor, textColor;
+
+      if (v.status === 'not_measurable') {
+        fillColor   = 'rgba(150,150,150,0.7)';
+        strokeColor = '#333';
+        textColor   = '#fff';
+      } else {
+        var ch4 = v.ch4 !== '' && v.ch4 != null ? parseFloat(v.ch4) : null;
+        if (ch4 === null) {
+          fillColor   = 'rgba(200,200,200,0.8)';
+          strokeColor = '#999';
+          textColor   = '#333';
+        } else {
+          fillColor   = ch4ToColor(ch4);  // direktno % bez normalizacije
+          strokeColor = 'rgba(0,0,0,0.6)';
+          // Tekst crn za svjetlije boje, bijel za tamnije (>40%)
+          textColor   = ch4 > 40 ? '#ffffff' : '#000000';
+        }
+      }
+
+      // Sjena
+      ctx.shadowColor   = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur    = 6;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+
+      // Kružić
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = Math.max(1.5, r * 0.12);
+      ctx.stroke();
+
+      // Naziv odušnika unutar kružića - MAKNUT
+      // Samo CH₄ postotak iznad kružića
+      if (v.status === 'measured' && v.ch4 !== '' && v.ch4 != null) {
+        var ch4Label = parseFloat(v.ch4).toFixed(2) + '%';
+        var fontSize = Math.max(7, r * 0.65);
+        ctx.font = 'bold ' + fontSize + 'px Arial';
+        ctx.textAlign  = 'center';
+        ctx.textBaseline = 'bottom';
+        // Bijela sjena za čitljivost
+        ctx.fillStyle = 'white';
+        ctx.fillText(ch4Label, px + 1, py - r - 2 + 1);
+        ctx.fillStyle = '#111';
+        ctx.fillText(ch4Label, px, py - r - 2);
+      }
+    });
+
+    // ── Legenda CH₄ u gornjem desnom kutu ──────────────────────────────────
+    var legendStops = [
+      [0.8,  'CH₄'],
+      [2.4,  ''],
+      [4.4,  ''],
+      [6.4,  ''],
+      [9.6,  ''],
+      [12.8, ''],
+      [16.0, ''],
+      [20.0, ''],
+      [24.0, ''],
+      [32.0, ''],
+      [40.0, ''],
+      [48.0, ''],
+      [56.0, ''],
+      [64.0, ''],
+      [80.0, '']
+    ];
+    var labels = ['0.8%','2.4%','4.4%','6.4%','9.6%','12.8%','16.0%','20.0%','24.0%','32.0%','40.0%','48.0%','56.0%','64.0%','80.0%'];
+
+    var boxW    = Math.max(18, canvas.width * 0.038);
+    var boxH    = Math.max(14, canvas.height * 0.032);
+    var pad     = Math.max(6, canvas.width * 0.012);
+    var fontSize = Math.max(8, boxH * 0.58);
+    var totalH  = legendStops.length * boxH;
+    var legendW = boxW + pad + canvas.width * 0.07;
+
+    var lx = canvas.width  - legendW - pad;
+    var ly = pad;
+
+    // Pozadina legende - bijela s opacitetom
+    ctx.fillStyle = 'rgba(255,255,255,0.82)';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(lx - pad/2, ly - pad/2, legendW + pad, totalH + pad + fontSize + pad, 6)
+                  : ctx.rect(lx - pad/2, ly - pad/2, legendW + pad, totalH + pad + fontSize + pad);
+    ctx.fill();
+
+    // Naslov CH₄
+    ctx.fillStyle = '#111';
+    ctx.font = 'bold ' + (fontSize + 2) + 'px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('CH₄', lx + boxW/2 - 2, ly);
+    ly += fontSize + 4;
+
+    // Bojani kvadratići s labelama
+    ctx.font = 'bold ' + fontSize + 'px Arial';
+    legendStops.forEach(function(stop, i) {
+      var by = ly + i * boxH;
+      // kvadratić
+      ctx.fillStyle = ch4ToColor(stop[0]);
+      ctx.fillRect(lx, by, boxW, boxH - 1);
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(lx, by, boxW, boxH - 1);
+      // label
+      ctx.fillStyle = '#111';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(labels[i], lx + boxW + 3, by + boxH / 2);
+    });
+  };
 
   // ── Očisti ──
   function clearAll() {
