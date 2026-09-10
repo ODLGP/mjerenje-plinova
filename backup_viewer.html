@@ -732,6 +732,39 @@
     img.src = ld.img;
 
     document.getElementById('map-modal').classList.add('open');
+
+    // Event listener za klik na kružić
+    var canvas = document.getElementById('map-canvas');
+    // Ukloni stari listener
+    canvas.replaceWith(canvas.cloneNode(true));
+    var newCanvas = document.getElementById('map-canvas');
+    newCanvas.style.pointerEvents = 'auto';
+    newCanvas.style.cursor = 'pointer';
+    newCanvas.addEventListener('click', function(e) {
+      var rect   = newCanvas.getBoundingClientRect();
+      var scaleX = newCanvas.width  / rect.width;
+      var scaleY = newCanvas.height / rect.height;
+      var mx = (e.clientX - rect.left) * scaleX;
+      var my = (e.clientY - rect.top)  * scaleY;
+
+      var ld     = LANDFILL_DATA[_mapMeasurement.landfill && _mapMeasurement.landfill.name || ''];
+      if (!ld) return;
+      var coords = getCoords(ld.id);
+      var r      = Math.max(10, newCanvas.width * 0.018);
+
+      // Pronađi kliknut odušnik
+      var hit = null;
+      (_mapMeasurement.vents || []).forEach(function(v) {
+        var c = coords[v.name];
+        if (!c) return;
+        var px = (c.x / 100) * newCanvas.width;
+        var py = (c.y / 100) * newCanvas.height;
+        var dist = Math.sqrt((mx - px) * (mx - px) + (my - py) * (my - py));
+        if (dist <= r * 1.5) hit = v;
+      });
+
+      if (hit) showVentPopup(hit, e.clientX, e.clientY);
+    });
   };
 
   window.closeMapModal = function() {
@@ -887,6 +920,77 @@
       ctx.fillText(labels[i], lx + boxW + 3, by + boxH / 2);
     });
   };
+
+  // ── Vent popup ─────────────────────────────────────────────────────────────
+  function showVentPopup(v, clientX, clientY) {
+    // Ukloni stari popup ako postoji
+    var old = document.getElementById('vent-popup');
+    if (old) old.remove();
+
+    var popup = document.createElement('div');
+    popup.id = 'vent-popup';
+    popup.style.cssText = [
+      'position:fixed',
+      'z-index:9999',
+      'background:white',
+      'border-radius:10px',
+      'box-shadow:0 6px 24px rgba(0,0,0,0.35)',
+      'padding:14px 18px',
+      'min-width:180px',
+      'font-size:13px',
+      'border-top:4px solid ' + (v.ch4 != null && v.ch4 !== '' ? ch4ToColor(parseFloat(v.ch4)) : '#888')
+    ].join(';');
+
+    var rows = [
+      ['CH₄', v.ch4  != null && v.ch4  !== '' ? v.ch4  + ' %'   : '—'],
+      ['CO₂', v.co2  != null && v.co2  !== '' ? v.co2  + ' %'   : '—'],
+      ['O₂',  v.o2   != null && v.o2   !== '' ? v.o2   + ' %'   : '—'],
+      ['H₂',  v.h2   != null && v.h2   !== '' ? v.h2   + ' ppm' : '—'],
+      ['H₂S', v.h2s  != null && v.h2s  !== '' ? v.h2s  + ' ppm' : '—'],
+      ['T',   v.temp != null && v.temp !== '' ? v.temp + ' °C'  : '—'],
+    ];
+
+    var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+      + '<strong style="font-size:15px;">' + v.name + '</strong>'
+      + '<span onclick="document.getElementById(\'vent-popup\').remove()" style="cursor:pointer;font-size:20px;color:#aaa;line-height:1;margin-left:12px;">×</span>'
+      + '</div>';
+
+    rows.forEach(function(row) {
+      html += '<div style="display:flex;justify-content:space-between;gap:16px;padding:3px 0;border-bottom:1px solid #f0f0f0;">'
+        + '<span style="color:#888;">' + row[0] + '</span>'
+        + '<strong>' + row[1] + '</strong>'
+        + '</div>';
+    });
+
+    if (v.note) {
+      html += '<div style="margin-top:8px;font-size:12px;color:#888;font-style:italic;">📝 ' + v.note + '</div>';
+    }
+
+    popup.innerHTML = html;
+    document.body.appendChild(popup);
+
+    // Pozicioniraj popup uz klik, ali unutar viewporta
+    var vpW = window.innerWidth;
+    var vpH = window.innerHeight;
+    var pw  = 200;
+    var ph  = 220;
+    var left = clientX + 12;
+    var top  = clientY - 20;
+    if (left + pw > vpW) left = clientX - pw - 12;
+    if (top  + ph > vpH) top  = vpH - ph - 10;
+    popup.style.left = left + 'px';
+    popup.style.top  = top  + 'px';
+
+    // Zatvori klikom izvan
+    setTimeout(function() {
+      document.addEventListener('click', function onOut(e) {
+        if (!popup.contains(e.target)) {
+          popup.remove();
+          document.removeEventListener('click', onOut);
+        }
+      });
+    }, 50);
+  }
 
   // ── Očisti ──
   function clearAll() {
