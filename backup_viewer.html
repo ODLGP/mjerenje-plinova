@@ -266,8 +266,75 @@
   #no-data { display: block; }
 
   @media (max-width: 600px) {
-    body { padding: 12px; }
-    .meas-header { flex-direction: column; align-items: flex-start; }
+    body { padding: 10px; }
+
+    header { padding: 14px 16px; border-radius: 10px; }
+    header h1 { font-size: 16px; }
+
+    /* Drop zona */
+    .drop-zone { padding: 28px 16px; }
+    .drop-zone .icon { font-size: 36px; }
+    .drop-zone h2 { font-size: 15px; }
+
+    /* Toolbar */
+    .toolbar { flex-direction: column; align-items: stretch; }
+    .toolbar input[type=text],
+    .toolbar select { width: 100%; }
+    .toolbar button { width: 100%; padding: 13px; font-size: 15px; }
+
+    /* Kartice */
+    .meas-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .meas-header .actions { width: 100%; }
+    .meas-header .actions button { flex: 1; padding: 10px 6px; font-size: 13px; }
+
+    /* Tablica - kartice na mobitelu */
+    .meas-body { padding: 10px; }
+    table, thead, tbody, th, td, tr { display: block; }
+    thead { display: none; }
+    tr {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      padding: 10px 12px;
+    }
+    tr:nth-child(even) td { background: transparent; }
+    td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid #f5f5f5;
+      text-align: left;
+      white-space: normal;
+    }
+    td:last-child { border-bottom: none; }
+    td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: #555;
+      font-size: 12px;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Map modal fullscreen */
+    .map-modal-overlay { padding: 0; align-items: flex-end; }
+    .map-modal-box {
+      border-radius: 14px 14px 0 0;
+      max-height: 95vh;
+      overflow-y: auto;
+    }
+    .map-modal-header { padding: 12px 14px; }
+    .map-modal-header h3 { font-size: 14px; }
+
+    /* CH4 legenda */
+    .ch4-legend { padding: 8px 12px; }
+    .ch4-legend span { font-size: 11px; }
+
+    /* Stat cards */
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .stat-card .val { font-size: 22px; }
   }
 </style>
 </head>
@@ -286,7 +353,7 @@
   <div class="icon">📂</div>
   <h2>Učitaj JSON backup datoteke</h2>
   <p>Klikni ili povuci .json datoteke ovdje<br>Možeš učitati više datoteka odjednom</p>
-  <input type="file" id="file-input" accept=".json" multiple>
+  <input type="file" id="file-input" accept=".json,application/json" multiple>
 </div>
 
 <!-- STATISTIKE -->
@@ -500,17 +567,17 @@
     m.vents.forEach(function(v) {
       var measured = v.status === 'measured';
       html += '<tr>' +
-        '<td><strong>' + (v.name || '—') + '</strong></td>' +
-        '<td>' + (v.ch4  || '—') + '</td>' +
-        '<td>' + (v.co2  || '—') + '</td>' +
-        '<td>' + (v.o2   || '—') + '</td>' +
-        '<td>' + (v.h2   || '—') + '</td>' +
-        '<td>' + (v.h2s  || '—') + '</td>' +
-        '<td>' + (v.temp || '—') + '</td>' +
-        '<td><span class="badge ' + (measured ? 'badge-ok' : 'badge-warn') + '">' +
+        '<td data-label="Odušnik"><strong>' + (v.name || '—') + '</strong></td>' +
+        '<td data-label="CH₄ [%]">'  + (v.ch4  || '—') + '</td>' +
+        '<td data-label="CO₂ [%]">'  + (v.co2  || '—') + '</td>' +
+        '<td data-label="O₂ [%]">'   + (v.o2   || '—') + '</td>' +
+        '<td data-label="H₂ [ppm]">' + (v.h2   || '—') + '</td>' +
+        '<td data-label="H₂S [ppm]">'+ (v.h2s  || '—') + '</td>' +
+        '<td data-label="Temp [°C]">' + (v.temp || '—') + '</td>' +
+        '<td data-label="Status"><span class="badge ' + (measured ? 'badge-ok' : 'badge-warn') + '">' +
           (measured ? 'Izmjeren' : 'Nije izmjereno') +
         '</span></td>' +
-        '<td>' + (v.note || '') + '</td>' +
+        '<td data-label="Napomena">' + (v.note || '') + '</td>' +
       '</tr>';
     });
 
@@ -740,19 +807,19 @@
     var newCanvas = document.getElementById('map-canvas');
     newCanvas.style.pointerEvents = 'auto';
     newCanvas.style.cursor = 'pointer';
-    newCanvas.addEventListener('click', function(e) {
+
+    function handleCanvasInteraction(clientX, clientY) {
       var rect   = newCanvas.getBoundingClientRect();
       var scaleX = newCanvas.width  / rect.width;
       var scaleY = newCanvas.height / rect.height;
-      var mx = (e.clientX - rect.left) * scaleX;
-      var my = (e.clientY - rect.top)  * scaleY;
+      var mx = (clientX - rect.left) * scaleX;
+      var my = (clientY - rect.top)  * scaleY;
 
       var ld     = LANDFILL_DATA[_mapMeasurement.landfill && _mapMeasurement.landfill.name || ''];
       if (!ld) return;
       var coords = getCoords(ld.id);
       var r      = Math.max(10, newCanvas.width * 0.018);
 
-      // Pronađi kliknut odušnik
       var hit = null;
       (_mapMeasurement.vents || []).forEach(function(v) {
         var c = coords[v.name];
@@ -763,8 +830,20 @@
         if (dist <= r * 1.5) hit = v;
       });
 
-      if (hit) showVentPopup(hit, e.clientX, e.clientY);
+      if (hit) showVentPopup(hit, clientX, clientY);
+    }
+
+    // Click (desktop)
+    newCanvas.addEventListener('click', function(e) {
+      handleCanvasInteraction(e.clientX, e.clientY);
     });
+
+    // Touch (mobitel)
+    newCanvas.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      var touch = e.changedTouches[0];
+      handleCanvasInteraction(touch.clientX, touch.clientY);
+    }, { passive: false });
   };
 
   window.closeMapModal = function() {
