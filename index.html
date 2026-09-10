@@ -1225,6 +1225,27 @@ textarea {
     <button onclick="resetToLogin()" type="button">Povratak na naslovnu</button>
   </div>
   <h1>Povijest mjerenja</h1>
+
+  <!-- BACKUP TRAKA -->
+  <div id="backup-bar" style="background:linear-gradient(135deg,#1a237e,#283593);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+    <div style="color:white;">
+      <div style="font-weight:600;font-size:14px;">💾 Backup mjerenja</div>
+      <div id="backup-bar-info" style="font-size:12px;opacity:0.8;margin-top:2px;"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button id="backup-month-btn" onclick="backupCurrentMonth()" style="background:#3949ab;border:1px solid rgba(255,255,255,0.3);color:white;padding:8px 14px;font-size:13px;border-radius:6px;cursor:pointer;width:auto;margin:0;">📥 Preuzmi ovaj mjesec</button>
+      <select id="backup-month-select" style="background:#283593;border:1px solid rgba(255,255,255,0.3);color:white;padding:8px 10px;font-size:13px;border-radius:6px;cursor:pointer;width:auto;margin:0;">
+        <option value="">📦 Odaberi mjesec...</option>
+      </select>
+      <button onclick="backupSelectedMonth()" style="background:#283593;border:1px solid rgba(255,255,255,0.3);color:white;padding:8px 14px;font-size:13px;border-radius:6px;cursor:pointer;width:auto;margin:0;">📥 Preuzmi odabrani</button>
+    </div>
+  </div>
+  <!-- BACKUP VIEWER LINK -->
+  <div style="text-align:right;margin-bottom:12px;margin-top:-8px;">
+    <a href="backup_viewer.html" target="_blank" style="font-size:12px;color:#3949ab;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">
+      📊 Otvori Backup Viewer — učitaj JSON i preuzmi Excel →
+    </a>
+  </div>
   <div class="filter-bar">
     <div class="filter-group">
       <label for="filter-landfill-select">Odlagalište:</label>
@@ -2869,6 +2890,122 @@ function clearFilters() {
   updateHistoryList();
 }
 
+// === BACKUP MJERENJA ===
+function _downloadJSON(data, filename) {
+  var json = JSON.stringify(data, null, 2);
+  var blob = new Blob([json], { type: 'application/json' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function backupCurrentMonth() {
+  var all  = loadMeasurements();
+  var now  = new Date();
+  var y    = now.getFullYear();
+  var m    = now.getMonth(); // 0-based
+  var filtered = all.filter(function(meas) {
+    if (!meas.date) return false;
+    var d = new Date(meas.date);
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+  if (filtered.length === 0) {
+    alert('Nema mjerenja za ovaj mjesec.');
+    return;
+  }
+  var mm  = String(m + 1).padStart(2, '0');
+  var yy  = String(y).slice(2);
+  var filename = 'Odlagalisni_plinovi_' + mm + '_' + yy + '.json';
+  _downloadJSON({ metadata: { mjesec: mm, godina: y, ukupno: filtered.length, export_datum: now.toISOString() }, mjerenja: filtered }, filename);
+}
+
+function backupAllData() {
+  var all = loadMeasurements();
+  if (all.length === 0) {
+    alert('Nema mjerenja za backup.');
+    return;
+  }
+  var now  = new Date();
+  var filename = 'Odlagalisni_plinovi_SVA_' + now.toISOString().slice(0,10) + '.json';
+  _downloadJSON({ metadata: { ukupno: all.length, export_datum: now.toISOString() }, mjerenja: all }, filename);
+}
+
+function backupSelectedMonth() {
+  var sel = document.getElementById('backup-month-select');
+  if (!sel || !sel.value) { alert('Odaberi mjesec iz padajućeg izbornika.'); return; }
+  var parts = sel.value.split('-');
+  var y = parseInt(parts[0]);
+  var m = parseInt(parts[1]) - 1; // 0-based
+  var all = loadMeasurements();
+  var filtered = all.filter(function(meas) {
+    if (!meas.date) return false;
+    var d = new Date(meas.date);
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+  if (filtered.length === 0) { alert('Nema mjerenja za odabrani mjesec.'); return; }
+  var mm = String(m + 1).padStart(2, '0');
+  var yy = String(y).slice(2);
+  var filename = 'Odlagalisni_plinovi_' + mm + '_' + yy + '.json';
+  _downloadJSON({ metadata: { mjesec: mm, godina: y, ukupno: filtered.length, export_datum: new Date().toISOString() }, mjerenja: filtered }, filename);
+}
+
+function initBackupBar() {
+  var info = document.getElementById('backup-bar-info');
+  if (!info) return;
+  var now       = new Date();
+  var y         = now.getFullYear();
+  var m         = now.getMonth();
+  var mm        = String(m + 1).padStart(2, '0');
+  var all       = loadMeasurements();
+  var thisMonth = all.filter(function(meas) {
+    if (!meas.date) return false;
+    var d = new Date(meas.date);
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+  var mjeseci = ['siječanj','veljača','ožujak','travanj','svibanj','lipanj','srpanj','kolovoz','rujan','listopad','studeni','prosinac'];
+  info.textContent = thisMonth.length + ' mjerenja u ' + mjeseci[m] + ' ' + y + '.';
+
+  // Highlight gumba ako je zadnji dan u mjesecu
+  var lastDay = new Date(y, m + 1, 0).getDate();
+  if (now.getDate() === lastDay) {
+    var btn = document.getElementById('backup-month-btn');
+    if (btn) {
+      btn.style.background = '#f57f17';
+      btn.style.animation  = 'pulse 1.5s infinite';
+      btn.textContent      = '📥 Preuzmi ' + mm + '/' + String(y).slice(2) + ' (danas!)';
+    }
+  }
+
+  // Popuni dropdown s dostupnim mjesecima iz mjerenja
+  var sel = document.getElementById('backup-month-select');
+  if (!sel) return;
+  // Pokupi sve jedinstvene godine+mjesece
+  var monthSet = {};
+  all.forEach(function(meas) {
+    if (!meas.date) return;
+    var d  = new Date(meas.date);
+    var ky = d.getFullYear();
+    var km = d.getMonth();
+    var key = ky + '-' + String(km + 1).padStart(2, '0');
+    if (!monthSet[key]) monthSet[key] = { y: ky, m: km, count: 0 };
+    monthSet[key].count++;
+  });
+  // Sortiraj silazno
+  var keys = Object.keys(monthSet).sort().reverse();
+  sel.innerHTML = '<option value="">📦 Odaberi mjesec...</option>';
+  keys.forEach(function(key) {
+    var entry = monthSet[key];
+    var label = mjeseci[entry.m] + ' ' + entry.y + ' (' + entry.count + ')';
+    var opt   = document.createElement('option');
+    opt.value       = key;
+    opt.textContent = label;
+    sel.appendChild(opt);
+  });
+}
+
 function initApp() {
   // Ovdje zalijepi kod za Service Worker
   if ('serviceWorker' in navigator) {
@@ -2948,6 +3085,7 @@ function initApp() {
     // Show loading state
     document.getElementById('history-list').innerHTML = '<p style="text-align:center;color:#888;">Učitavam mjerenja...</p>';
     showScreen('measurement-history');
+    initBackupBar();
     // Try to load from Firebase first
     const fbData = await loadMeasurementsFromFirebase();
     updateHistoryList(fbData || undefined);
