@@ -1,10 +1,11 @@
-const CACHE_NAME = 'mop-mjerenje-v64';
+const CACHE_NAME = 'mop-mjerenje-v69';
 const urlsToCache = [
   './index.html',
   './manifest.json',
   './icon-192.png',
   './rename_vent.js',
   './chart_view.js',
+  './backup_viewer.html',
   // ai_assistant.js se NE cachira - uvijek svježe s mreže
   './icon-512.png',
   // Slike uređaja
