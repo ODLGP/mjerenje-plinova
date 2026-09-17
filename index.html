@@ -935,6 +935,12 @@ textarea {
 <body>
 <button id="dark-toggle" title="Tamni/svijetli mod" onclick="toggleDark()">🌙</button>
 
+<!-- SYNC PENDING BANNER -->
+<div id="sync-pending-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#e65100;color:white;padding:10px 16px;font-size:13px;font-weight:600;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+  <span>⚠️ Mjerenje je spremljeno lokalno — čeka se internet za sinkronizaciju s bazom.</span>
+  <button onclick="_trySyncNow()" style="background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:white;padding:5px 14px;font-size:12px;border-radius:6px;cursor:pointer;width:auto;margin:0;font-weight:600;">🔄 Sinkroniziraj sada</button>
+</div>
+
 <div class="screen" id="password-screen">
   <div class="login-container">
     <div class="login-header">
@@ -2469,14 +2475,69 @@ function saveMeasurements(arr) {
   _saveMeasurementsToFirebase(arr);
 }
 async function _saveMeasurementsToFirebase(arr) {
-  if (!window.firebaseDB) return;
+  if (!window.firebaseDB) {
+    _markPendingSync();
+    return;
+  }
+  if (!navigator.onLine) {
+    _markPendingSync();
+    console.warn('Offline - mjerenje spremljeno lokalno, sync na čekanju.');
+    return;
+  }
   try {
     const { doc, setDoc } = window.firebaseFunctions;
     await setDoc(doc(window.firebaseDB, 'mop_data', 'measurements'), { list: arr });
+    _clearPendingSync();
+    console.log('Firebase sync OK');
   } catch(e) {
+    _markPendingSync();
     console.warn('Firebase measurements save failed:', e);
   }
 }
+
+// === PENDING SYNC ===
+function _markPendingSync() {
+  localStorage.setItem('mop_pending_sync', '1');
+  _showSyncBanner(true);
+}
+function _clearPendingSync() {
+  localStorage.removeItem('mop_pending_sync');
+  _showSyncBanner(false);
+}
+function _hasPendingSync() {
+  return localStorage.getItem('mop_pending_sync') === '1';
+}
+function _showSyncBanner(show) {
+  var banner = document.getElementById('sync-pending-banner');
+  if (!banner) return;
+  banner.style.display = show ? 'flex' : 'none';
+}
+async function _trySyncNow() {
+  if (!_hasPendingSync()) return;
+  if (!navigator.onLine || !window.firebaseDB) return;
+  const arr = loadMeasurements();
+  try {
+    const { doc, setDoc } = window.firebaseFunctions;
+    await setDoc(doc(window.firebaseDB, 'mop_data', 'measurements'), { list: arr });
+    _clearPendingSync();
+    console.log('Pending sync completed');
+    // Prikaži kratku potvrdu
+    var banner = document.getElementById('sync-pending-banner');
+    if (banner) {
+      banner.innerHTML = '✅ Sinkronizacija s bazom uspješna!';
+      banner.style.background = '#2e7d32';
+      setTimeout(function() { banner.style.display = 'none'; }, 3000);
+    }
+  } catch(e) {
+    console.warn('Pending sync failed:', e);
+  }
+}
+
+// Pokušaj sync kad se internet vrati
+window.addEventListener('online', function() {
+  console.log('Internet restored - attempting pending sync...');
+  setTimeout(_trySyncNow, 2000); // čekaj 2s da se veza stabilizira
+});
 async function loadMeasurementsFromFirebase() {
   if (!window.firebaseDB) return null;
   try {
@@ -4142,6 +4203,10 @@ function resetZoom() {
 document.addEventListener('DOMContentLoaded', () => {
   initAutoSave();
   initImageZoom();
+  // Provjeri pending sync pri pokretanju
+  if (_hasPendingSync()) _showSyncBanner(true);
+  // Pokušaj sync odmah ako online
+  if (navigator.onLine) setTimeout(_trySyncNow, 3000);
 });
 
 </script>
