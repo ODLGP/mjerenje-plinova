@@ -2510,22 +2510,38 @@ function _hasPendingSync() {
 function _showSyncBanner(show) {
   var banner = document.getElementById('sync-pending-banner');
   if (!banner) return;
-  banner.style.display = show ? 'flex' : 'none';
+  if (show) {
+    banner.style.display = 'flex';
+    banner.style.background = '#e65100';
+    banner.innerHTML =
+      '<span>⚠️ Mjerenje je spremljeno lokalno — čeka se sinkronizacija s bazom.</span>' +
+      '<button onclick="_trySyncNow()" style="background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:white;padding:5px 14px;font-size:12px;border-radius:6px;cursor:pointer;width:auto;margin:0;font-weight:600;">🔄 Sinkroniziraj sada</button>';
+  } else {
+    banner.style.display = 'none';
+  }
 }
 async function _trySyncNow() {
   if (!_hasPendingSync()) return;
-  if (!navigator.onLine || !window.firebaseDB) return;
+  if (!navigator.onLine || !window.firebaseDB) {
+    var banner = document.getElementById('sync-pending-banner');
+    if (banner) {
+      banner.style.background = '#b71c1c';
+      banner.innerHTML = '<span>❌ Nema internetske veze — mjerenje i dalje čeka sinkronizaciju.</span>' +
+        '<button onclick="_trySyncNow()" style="background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:white;padding:5px 14px;font-size:12px;border-radius:6px;cursor:pointer;width:auto;margin:0;font-weight:600;">🔄 Pokušaj opet</button>';
+    }
+    return;
+  }
   const arr = loadMeasurements();
   try {
     const { doc, setDoc } = window.firebaseFunctions;
     await setDoc(doc(window.firebaseDB, 'mop_data', 'measurements'), { list: arr });
     _clearPendingSync();
     console.log('Pending sync completed');
-    // Prikaži kratku potvrdu
     var banner = document.getElementById('sync-pending-banner');
     if (banner) {
-      banner.innerHTML = '✅ Sinkronizacija s bazom uspješna!';
       banner.style.background = '#2e7d32';
+      banner.style.display = 'flex';
+      banner.innerHTML = '<span>✅ Sinkronizacija s bazom uspješna!</span>';
       setTimeout(function() { banner.style.display = 'none'; }, 3000);
     }
   } catch(e) {
@@ -4203,10 +4219,11 @@ function resetZoom() {
 document.addEventListener('DOMContentLoaded', () => {
   initAutoSave();
   initImageZoom();
-  // Provjeri pending sync pri pokretanju
-  if (_hasPendingSync()) _showSyncBanner(true);
-  // Pokušaj sync odmah ako online
-  if (navigator.onLine) setTimeout(_trySyncNow, 3000);
+  // Provjeri pending sync pri pokretanju - s malim delay da DOM bude spreman
+  setTimeout(function() {
+    if (_hasPendingSync()) _showSyncBanner(true);
+    if (navigator.onLine) _trySyncNow();
+  }, 1500);
 });
 
 </script>
